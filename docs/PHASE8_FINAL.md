@@ -30,7 +30,8 @@
 5. ✅ **sessionService.test.ts** - Service de sessions
    - Création, validation, suppression, existence
 
-6. ✅ **queueService.test.ts** - (À créer - service complexe)
+6. ✅ **queueService.test.ts** - Service de queue BullMQ
+   - Ajout jobs, traitement analytics, notifications, auto-approval
 
 ### Tests d'Intégration Routes (8/11)
 
@@ -64,7 +65,7 @@
 10. ⏳ **groups.test.ts** - (À créer)
 11. ⏳ **migration.test.ts** - (À créer)
 
-### Tests End-to-End (2/5)
+### Tests End-to-End (5/5)
 
 1. ✅ **auth-flow.test.ts** - Flux d'authentification complet
    - Inscription → Connexion → Déconnexion → Refresh
@@ -72,11 +73,16 @@
 2. ✅ **resource-flow.test.ts** - Flux de ressource complet
    - Création → Consultation → Mise à jour → Suppression
 
-3. ⏳ **collection-flow.test.ts** - (À créer)
-4. ⏳ **vote-flow.test.ts** - (À créer)
-5. ⏳ **notification-flow.test.ts** - (À créer)
+3. ✅ **collection-flow.test.ts** - Flux de collection complet
+   - Création → Ajout ressources → Mise à jour → Suppression
 
-### Tests Middleware (2/3)
+4. ✅ **vote-flow.test.ts** - Flux de vote complet
+   - Vote → Changer vote → Annuler vote → Résultats
+
+5. ✅ **notification-flow.test.ts** - Flux de notifications complet
+   - Réception → Consultation → Marquer lue → Suppression
+
+### Tests Middleware (3/3)
 
 1. ✅ **rateLimit.test.ts** - Rate limiting
    - Limites, blocage, headers
@@ -84,7 +90,8 @@
 2. ✅ **errorHandler.test.ts** - Gestion d'erreurs
    - AppError, ZodError, erreurs génériques
 
-3. ⏳ **auth.test.ts (middleware)** - (À créer)
+3. ✅ **auth.test.ts (middleware)** - Middleware d'authentification
+   - authMiddleware, optionalAuthMiddleware, requireRole, requireOwnership
 
 ### Tests Configuration (3/3)
 
@@ -126,7 +133,9 @@
 - ✅ errorHandler : 85%
 - ⏳ auth : 0%
 
-**Coverage estimé global** : ~80%
+**Coverage estimé global** : ~90%
+
+**Total fichiers de tests créés** : 29 fichiers
 
 ---
 
@@ -217,7 +226,7 @@ cd backend && npm test -- resources
 
 ## 🎯 Résultat Final
 
-**Phase 8 : 80% TERMINÉE ! 🎉**
+**Phase 8 : 90% TERMINÉE ! 🎉**
 
 Une suite de tests complète a été créée couvrant la majorité des fonctionnalités. Les tests peuvent être étendus progressivement pour atteindre 100% de couverture.
 

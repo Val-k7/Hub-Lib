@@ -1,315 +1,281 @@
-# Guide de Migration : localStorage → PostgreSQL
+# 🔄 Guide de Migration des Données - localStorage vers PostgreSQL
 
-**Version** : 1.0.0  
-**Date** : 2024
+**Date** : 2024  
+**Statut** : ✅ Prêt
 
 ---
 
 ## 📋 Vue d'ensemble
 
-Ce guide vous accompagne dans la migration des données depuis `localStorage` vers PostgreSQL via l'API backend.
-
-### Prérequis
-
-- ✅ Backend API démarré et accessible
-- ✅ PostgreSQL et Redis opérationnels
-- ✅ Compte administrateur avec token d'accès
-- ✅ Données exportées depuis localStorage
+Ce guide explique comment migrer vos données de `localStorage` vers PostgreSQL via l'API backend.
 
 ---
 
 ## 🚀 Étapes de Migration
 
-### Étape 1 : Exporter les données depuis localStorage
+### 1. Préparation
 
-#### Option A : Via la console du navigateur (Recommandé)
-
-1. Ouvrez votre application dans le navigateur
-2. Ouvrez la console du navigateur (F12)
-3. Copiez et collez le contenu de `scripts/export-localStorage.js`
-4. Exécutez :
-   ```javascript
-   downloadExport()
-   ```
-5. Le fichier JSON sera téléchargé automatiquement
-
-#### Option B : Via le script directement
-
-```javascript
-// Dans la console du navigateur
-const data = exportLocalStorage();
-console.log(data);
-```
-
-#### Option C : Inspecter avant de télécharger
-
-```javascript
-// Voir un aperçu des données
-const data = previewExport();
-// Puis télécharger si tout est OK
-downloadExport();
-```
-
-### Étape 2 : Préparer le token d'accès
-
-Vous devez être connecté en tant qu'administrateur pour importer des données.
+Assurez-vous que le backend est démarré et fonctionnel :
 
 ```bash
-# Option 1 : Via variable d'environnement
-export ACCESS_TOKEN="votre-token-jwt"
-
-# Option 2 : Via le script (voir Étape 3)
+cd backend
+npm install
+npm run prisma:generate
+npm run prisma:migrate
+npm run dev
 ```
 
-**Note** : Le token peut être récupéré depuis la console du navigateur :
+### 2. Export des Données localStorage
+
+Depuis le navigateur, ouvrez la console et exécutez :
+
 ```javascript
-localStorage.getItem('hub-lib-access-token')
+// Le script export-localStorage.js génère un fichier JSON
+// Exécutez-le depuis la page de l'application
 ```
 
-### Étape 3 : Valider les données (Recommandé)
-
-Avant d'importer, validez les données pour détecter les problèmes potentiels :
+Ou utilisez le script Node.js :
 
 ```bash
-# Avec validation
-npx tsx scripts/import-to-postgres.ts export.json --token YOUR_TOKEN
+node scripts/export-localStorage.js
+```
 
-# Ou via l'API directement
-curl -X POST http://localhost:3000/api/migration/validate \
+Cela génère un fichier `localStorage-export.json` avec toutes vos données.
+
+### 3. Validation des Données
+
+Avant d'importer, validez les données :
+
+```bash
+# Utiliser le script TypeScript
+ts-node scripts/import-to-postgres.ts validate localStorage-export.json
+```
+
+Ou via l'API :
+
+```bash
+curl -X POST http://localhost:3001/api/migration/validate \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer YOUR_TOKEN" \
-  -d @export.json
+  -H "Authorization: Bearer YOUR_ADMIN_TOKEN" \
+  -d @localStorage-export.json
 ```
 
-### Étape 4 : Importer les données
+### 4. Import des Données
+
+Une fois validées, importez les données :
 
 ```bash
-# Import avec validation
-npx tsx scripts/import-to-postgres.ts export.json \
-  --token YOUR_TOKEN \
-  --url http://localhost:3000
+# Via le script
+ts-node scripts/import-to-postgres.ts import localStorage-export.json
 
-# Import sans validation (déconseillé)
-npx tsx scripts/import-to-postgres.ts export.json \
-  --token YOUR_TOKEN \
-  --skip-validation
+# Ou via l'API
+curl -X POST http://localhost:3001/api/migration/import \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_ADMIN_TOKEN" \
+  -d @localStorage-export.json
 ```
 
 ---
 
-## 📊 Structure des Données Exportées
+## 📊 Format des Données
 
-Le fichier JSON exporté a la structure suivante :
+Le fichier JSON exporté doit suivre cette structure :
 
 ```json
 {
   "metadata": {
     "exportDate": "2024-01-01T00:00:00.000Z",
-    "exportVersion": "1.0.0",
-    "tables": ["profiles", "resources", ...]
+    "version": "1.0.0"
   },
   "tables": {
-    "profiles": [...],
-    "resources": [...],
-    ...
-  },
-  "auth": {...},
-  "authData": [...],
-  "analytics": [...]
+    "profiles": [
+      {
+        "id": "user-123",
+        "email": "user@example.com",
+        "username": "username",
+        "full_name": "Full Name"
+      }
+    ],
+    "resources": [
+      {
+        "id": "resource-123",
+        "title": "Resource Title",
+        "user_id": "user-123"
+      }
+    ],
+    "collections": [],
+    "comments": [],
+    "notifications": []
+  }
 }
 ```
-
-### Tables migrées
-
-Les tables suivantes sont automatiquement migrées :
-
-1. **profiles** - Profils utilisateurs
-2. **resources** - Ressources
-3. **saved_resources** - Ressources sauvegardées
-4. **resource_ratings** - Notes des ressources
-5. **resource_shares** - Partages de ressources
-6. **resource_comments** - Commentaires
-7. **groups** - Groupes
-8. **group_members** - Membres de groupes
-9. **notifications** - Notifications
-10. **category_tag_suggestions** - Suggestions de catégories/tags
-11. **suggestion_votes** - Votes sur suggestions
-12. **user_roles** - Rôles utilisateurs
-13. **resource_templates** - Templates de ressources
-14. **collections** - Collections
-15. **collection_resources** - Ressources dans collections
-16. **admin_config** - Configuration admin
-17. **resource_versions** - Versions de ressources
-
----
-
-## 🔄 Mapping des Données
-
-### Conversion automatique
-
-- **IDs** : Conversion automatique vers UUID PostgreSQL
-- **Dates** : Conversion des timestamps en dates PostgreSQL
-- **Champs** : Mapping automatique snake_case → camelCase
-- **Relations** : Validation des clés étrangères
-
-### Exemple de conversion
-
-**localStorage (format original)** :
-```json
-{
-  "id": "resource-123",
-  "user_id": "user-456",
-  "created_at": "2024-01-01T00:00:00.000Z",
-  "resource_type": "external_link"
-}
-```
-
-**PostgreSQL (format migré)** :
-```json
-{
-  "id": "550e8400-e29b-41d4-a716-446655440000",
-  "userId": "6ba7b810-9dad-11d1-80b4-00c04fd430c8",
-  "createdAt": "2024-01-01T00:00:00.000Z",
-  "resourceType": "external_link"
-}
-```
-
----
-
-## ✅ Validation et Intégrité
-
-### Vérifications automatiques
-
-Le système valide automatiquement :
-
-- ✅ Format des UUIDs
-- ✅ Présence des champs requis
-- ✅ Relations entre tables (user_id, resource_id, etc.)
-- ✅ Types de données (strings, dates, nombres)
-- ✅ Contraintes d'unicité
-
-### Gestion des conflits
-
-- **Doublons** : Les enregistrements dupliqués sont ignorés (`skipDuplicates`)
-- **IDs existants** : Les IDs existants sont préservés (pas de réécriture)
-- **Relations manquantes** : Les relations invalides génèrent des avertissements
 
 ---
 
 ## ⚠️ Points d'Attention
 
-### 1. Ordre d'import
+### 1. IDs
+- Les IDs de localStorage sont des strings simples
+- PostgreSQL utilise des UUIDs
+- Le système génère automatiquement de nouveaux UUIDs
+- Les relations sont préservées
 
-Les tables sont importées dans un ordre spécifique pour respecter les dépendances :
+### 2. Conflits
+- Si un email existe déjà, le système peut :
+  - Sauter l'entrée
+  - Mettre à jour (selon configuration)
+  - Créer un conflit à résoudre manuellement
 
-1. `profiles` (doit être importé en premier)
-2. `user_roles`
-3. `resources`
-4. `collections`
-5. `collection_resources`
-6. ... (ordre complet défini dans le code)
+### 3. Relations
+- Toutes les relations sont validées
+- Les références invalides sont signalées
+- Les ressources orphelines sont créées avec l'utilisateur importateur
 
-### 2. Authentification
-
-- Les données d'authentification (`auth` et `authData`) **ne sont PAS** migrées automatiquement
-- Les utilisateurs doivent se reconnecter après la migration
-- Les mots de passe doivent être réinitialisés (sécurité)
-
-### 3. Analytics
-
-- Les données analytics sont migrées mais traitées différemment
-- L'historique localStorage n'est pas nécessairement migré (selon la configuration)
-
-### 4. Doublons
-
-- Utilisez `skipDuplicates` pour éviter les erreurs de doublons
-- Vérifiez les données avant import si vous avez des doutes
+### 4. Validation
+- Tous les champs sont validés selon le schéma Prisma
+- Les données invalides sont signalées dans le rapport
 
 ---
 
-## 🔧 Résolution des Problèmes
+## 🔍 Vérification Post-Migration
 
-### Erreur : "Table non mappée"
+### 1. Vérifier les Comptes
 
-**Solution** : La table n'existe pas dans le mapping. Vérifiez que le nom de la table est correct.
+```sql
+SELECT COUNT(*) FROM profiles;
+SELECT COUNT(*) FROM resources;
+SELECT COUNT(*) FROM collections;
+```
 
-### Erreur : "Validation échouée"
+### 2. Vérifier les Relations
 
-**Solution** : 
-1. Vérifiez les logs pour voir quelles validations ont échoué
-2. Nettoyez les données invalides dans le fichier JSON
-3. Réessayez l'import avec `--skip-validation` (déconseillé)
+```sql
+-- Ressources sans propriétaire
+SELECT COUNT(*) FROM resources WHERE user_id IS NULL;
 
-### Erreur : "Foreign key constraint"
+-- Collections sans propriétaire
+SELECT COUNT(*) FROM collections WHERE user_id IS NULL;
+```
 
-**Solution** : 
-1. Vérifiez que toutes les tables parentes sont importées
-2. Vérifiez que les IDs de référence existent
-3. Les relations invalides seront ignorées avec un avertissement
+### 3. Test de Connexion
 
-### Erreur : "Token invalide"
-
-**Solution** :
-1. Vérifiez que votre token est valide
-2. Assurez-vous d'être connecté en tant qu'administrateur
-3. Récupérez un nouveau token depuis l'interface
-
----
-
-## 📝 Exemple Complet
+Testez la connexion avec un compte migré :
 
 ```bash
-# 1. Exporter depuis localStorage (dans le navigateur)
-downloadExport()
-# → Fichier téléchargé : hub-lib-export-2024-01-01.json
-
-# 2. Obtenir le token (dans la console du navigateur)
-localStorage.getItem('hub-lib-access-token')
-# → "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-
-# 3. Valider les données
-npx tsx scripts/import-to-postgres.ts hub-lib-export-2024-01-01.json \
-  --token "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." \
-  --url http://localhost:3000
-
-# 4. Si la validation réussit, l'import se fait automatiquement
-# Sinon, corrigez les erreurs et réessayez
+curl -X POST http://localhost:3001/api/auth/signin \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "migrated@example.com",
+    "password": "your-password"
+  }'
 ```
 
 ---
 
-## 🔐 Sécurité
+## 🛠️ Scripts Disponibles
 
-- ✅ Seuls les administrateurs peuvent importer des données
-- ✅ Validation stricte des données avant import
-- ✅ Transactions pour garantir l'intégrité
-- ✅ Logs détaillés pour audit
+### export-localStorage.js
 
-**⚠️ Important** : Ne partagez jamais votre token d'accès. Il donne accès complet à l'API.
+Exporte toutes les données de localStorage dans un fichier JSON.
+
+**Usage** :
+```bash
+node scripts/export-localStorage.js
+```
+
+**Options** :
+- Génère `localStorage-export-YYYY-MM-DD.json`
+- Inclut toutes les tables
+- Format JSON structuré
+
+### import-to-postgres.ts
+
+Importe les données depuis un fichier JSON vers PostgreSQL.
+
+**Usage** :
+```bash
+ts-node scripts/import-to-postgres.ts import <file.json>
+ts-node scripts/import-to-postgres.ts validate <file.json>
+```
+
+**Options** :
+- `import` : Importe les données
+- `validate` : Valide sans importer
+- Affiche un rapport détaillé
 
 ---
 
-## 📚 Références
+## 🔒 Sécurité
 
-- [Documentation API Migration](/api/migration)
-- [Roadmap de Migration](/roadmap.md)
-- [Documentation Backend](/backend/README.md)
+### Authentification Requise
+
+L'endpoint de migration nécessite un token admin :
+
+```javascript
+const token = await getAdminToken();
+// Utiliser le token dans les headers
+```
+
+### Validation
+
+- Toutes les données sont validées avant import
+- Les injections SQL sont impossibles (Prisma)
+- Les données sensibles sont loggées minimalement
+
+---
+
+## 📝 Logs et Rapports
+
+Le script d'import génère un rapport détaillé :
+
+```
+✅ Import terminé
+   - Profiles: 150 importés, 0 erreurs
+   - Resources: 450 importés, 0 erreurs
+   - Collections: 75 importés, 0 erreurs
+   - Errors: 0
+```
+
+Les erreurs sont loggées dans le fichier de rapport :
+- `import-report-YYYY-MM-DD.log`
+
+---
+
+## 🆘 Dépannage
+
+### Erreur: "Token invalide"
+→ Vérifiez que vous êtes connecté en tant qu'admin
+
+### Erreur: "Données invalides"
+→ Validez le JSON avec le script `validate`
+
+### Erreur: "Conflit d'email"
+→ Résolvez les conflits manuellement ou mettez à jour les emails
+
+### Erreur: "Relation introuvable"
+→ Vérifiez que toutes les données dépendantes sont présentes
 
 ---
 
 ## ✅ Checklist de Migration
 
-- [ ] Données exportées depuis localStorage
-- [ ] Fichier JSON validé
-- [ ] Token d'accès administrateur obtenu
-- [ ] Backend API accessible
-- [ ] Validation des données réussie
-- [ ] Import des données réussi
-- [ ] Vérification des données dans PostgreSQL
-- [ ] Utilisateurs reconnectés
-- [ ] Tests de l'application après migration
+- [ ] Backend démarré et accessible
+- [ ] Données exportées de localStorage
+- [ ] Données validées
+- [ ] Import effectué
+- [ ] Vérification des comptes
+- [ ] Test de connexion réussi
+- [ ] Vérification des relations
+- [ ] Backup PostgreSQL créé
 
 ---
 
-**Besoin d'aide ?** Consultez les logs du backend ou créez une issue sur le repository.
+## 📚 Ressources
 
+- [Documentation Prisma](https://www.prisma.io/docs/)
+- [API Migration Endpoints](./API_ENDPOINTS.md#migration)
+- [Guide de déploiement](./deployment.md)
+
+---
+
+**Bon courage pour votre migration ! 🚀**

@@ -315,6 +315,30 @@ class QueueService {
   }
 
   /**
+   * Obtient le statut d'un job
+   */
+  async getJobStatus(type: JobType, jobId: string): Promise<any> {
+    const queue = this.queues.get(type);
+    if (!queue) {
+      throw new Error(`Queue ${type} n'existe pas`);
+    }
+
+    const job = await queue.getJob(jobId);
+    if (!job) {
+      return null;
+    }
+
+    return {
+      id: job.id,
+      state: await job.getState(),
+      progress: job.progress,
+      data: job.data,
+      failedReason: job.failedReason,
+      returnvalue: job.returnvalue,
+    };
+  }
+
+  /**
    * Obtient les statistiques d'une queue
    */
   async getQueueStats(type: JobType): Promise<{
