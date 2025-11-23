@@ -239,8 +239,7 @@ class QueueService {
   private async processAnalytics(job: Job<AnalyticsJobData>): Promise<void> {
     const { event, userId, resourceId, metadata } = job.data;
 
-    // Ici, on pourrait envoyer les données à un service d'analytics externe
-    // Pour l'instant, on log juste
+    // Log l'événement
     logger.info(`Analytics: ${event}`, {
       userId,
       resourceId,
@@ -248,10 +247,29 @@ class QueueService {
       timestamp: new Date().toISOString(),
     });
 
-    // Exemple : incrémenter un compteur dans Redis
-    const key = `analytics:${event}:${new Date().toISOString().split('T')[0]}`;
-    await redis.incr(key);
-    await redis.expire(key, 7 * 24 * 3600); // Expire après 7 jours
+    // Incrémenter les compteurs dans Redis
+    const dateStr = new Date().toISOString().split('T')[0];
+    
+    // Compteur global pour le type d'événement et la date
+    const globalKey = `analytics:${event}:${dateStr}`;
+    await redis.incr(globalKey);
+    await redis.expire(globalKey, 30 * 24 * 3600); // Expire après 30 jours
+
+    // Si c'est un événement lié à une ressource, créer une clé spécifique
+    if (resourceId && (event === 'resource_view' || event === 'resource_download' || event === 'resource_click')) {
+      const resourceKey = `analytics:${event}:${resourceId}:${dateStr}`;
+      await redis.incr(resourceKey);
+      await redis.expire(resourceKey, 30 * 24 * 3600); // Expire après 30 jours
+    }
+
+    // Si c'est un événement utilisateur, créer une clé spécifique
+    if (userId) {
+      const userKey = `analytics:${event}:user:${userId}:${dateStr}`;
+      await redis.incr(userKey);
+      await redis.expire(userKey, 30 * 24 * 3600); // Expire après 30 jours
+    }
+
+    // TODO: En production, on pourrait aussi stocker dans PostgreSQL pour l'historique long terme
   }
 
   /**

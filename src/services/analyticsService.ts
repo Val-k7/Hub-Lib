@@ -1,5 +1,6 @@
 /**
  * Service d'analytics pour suivre l'utilisation de l'application
+ * Utilise le backend API avec fallback localStorage pour le mode offline
  */
 
 interface AnalyticsEvent {
@@ -14,19 +15,69 @@ interface AnalyticsEvent {
 class AnalyticsService {
   private readonly ANALYTICS_KEY = 'hub-lib-analytics';
   private readonly MAX_EVENTS = 1000; // Limite d'événements stockés
+  private readonly API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
+  private useApiClient: boolean;
+
+  constructor() {
+    // Vérifier si on doit utiliser l'API backend
+    this.useApiClient = import.meta.env.VITE_USE_API_CLIENT === 'true';
+  }
 
   /**
    * Enregistre un événement analytics
    */
-  track(eventType: string, metadata?: Record<string, any>, userId?: string): void {
+  async track(eventType: string, metadata?: Record<string, any>, userId?: string): Promise<void> {
     const event: AnalyticsEvent = {
       id: `event_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       type: eventType,
       userId,
+      resourceId: metadata?.resourceId,
       metadata,
       timestamp: new Date().toISOString(),
     };
 
+    // Si on utilise l'API backend, envoyer au backend
+    if (this.useApiClient) {
+      try {
+        // Récupérer le token d'accès depuis localStorage
+        const accessToken = localStorage.getItem('hub-lib-access-token');
+        
+        const response = await fetch(`${this.API_BASE_URL}/api/analytics/track`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+          },
+          body: JSON.stringify({
+            event: eventType,
+            resourceId: metadata?.resourceId,
+            metadata: {
+              ...metadata,
+              resourceId: undefined, // Ne pas dupliquer
+            },
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+
+        // Événement envoyé avec succès, on peut le supprimer du cache local s'il y en a un
+        return;
+      } catch (error) {
+        // En cas d'erreur, sauvegarder en localStorage pour retry plus tard
+        console.warn('Erreur lors de l\'envoi de l\'événement analytics, sauvegarde locale:', error);
+        const events = this.getEvents();
+        events.push(event);
+        if (events.length > this.MAX_EVENTS) {
+          events.shift();
+        }
+        this.saveEvents(events);
+        return;
+      }
+    }
+
+    // Mode localStorage uniquement (fallback ou mode local)
     const events = this.getEvents();
     events.push(event);
 
@@ -39,14 +90,89 @@ class AnalyticsService {
   }
 
   /**
+   * Retente d'envoyer les événements en cache vers le backend
+   */
+  async retryFailedEvents(): Promise<void> {
+    if (!this.useApiClient) return;
+
+    const events = this.getEvents();
+    if (events.length === 0) return;
+
+    const accessToken = localStorage.getItem('hub-lib-access-token');
+    const failedEvents: AnalyticsEvent[] = [];
+
+    for (const event of events) {
+      try {
+        const response = await fetch(`${this.API_BASE_URL}/api/analytics/track`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+          },
+          body: JSON.stringify({
+            event: event.type,
+            resourceId: event.resourceId,
+            metadata: event.metadata,
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+      } catch (error) {
+        failedEvents.push(event);
+      }
+    }
+
+    // Garder seulement les événements qui ont échoué
+    if (failedEvents.length !== events.length) {
+      this.saveEvents(failedEvents);
+    }
+  }
+
+  /**
    * Récupère les statistiques d'utilisation
    */
-  getStats(userId?: string): {
+  async getStats(userId?: string): Promise<{
     totalEvents: number;
     eventsByType: Record<string, number>;
     recentEvents: AnalyticsEvent[];
     userEvents?: number;
-  } {
+  }> {
+    // Si on utilise l'API backend, récupérer depuis le backend
+    if (this.useApiClient) {
+      try {
+        const accessToken = localStorage.getItem('hub-lib-access-token');
+        const response = await fetch(`${this.API_BASE_URL}/api/analytics/stats`, {
+          headers: {
+            ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+          },
+        });
+
+        if (response.ok) {
+          const backendStats = await response.json();
+          
+          // Convertir le format backend en format frontend
+          const recentEvents: AnalyticsEvent[] = backendStats.recentEvents?.map((e: any) => ({
+            id: `event_${Date.now()}_${Math.random()}`,
+            type: e.event,
+            metadata: {},
+            timestamp: e.date,
+          })) || [];
+
+          return {
+            totalEvents: backendStats.totalEvents || 0,
+            eventsByType: backendStats.eventsByType || {},
+            recentEvents,
+            userEvents: backendStats.userEvents,
+          };
+        }
+      } catch (error) {
+        console.warn('Erreur lors de la récupération des stats depuis le backend, fallback localStorage:', error);
+      }
+    }
+
+    // Fallback localStorage
     const events = this.getEvents();
     const filteredEvents = userId 
       ? events.filter(e => e.userId === userId)
@@ -68,7 +194,20 @@ class AnalyticsService {
   /**
    * Récupère les ressources les plus consultées
    */
-  getPopularResources(limit: number = 10): Array<{ resourceId: string; views: number }> {
+  async getPopularResources(limit: number = 10): Promise<Array<{ resourceId: string; views: number }>> {
+    // Si on utilise l'API backend, récupérer depuis le backend
+    if (this.useApiClient) {
+      try {
+        const response = await fetch(`${this.API_BASE_URL}/api/analytics/popular-resources?limit=${limit}`);
+        if (response.ok) {
+          return await response.json();
+        }
+      } catch (error) {
+        console.warn('Erreur lors de la récupération des ressources populaires depuis le backend, fallback localStorage:', error);
+      }
+    }
+
+    // Fallback localStorage
     const events = this.getEvents();
     const viewEvents = events.filter(e => e.type === 'resource_view' && e.resourceId);
     
@@ -88,7 +227,20 @@ class AnalyticsService {
   /**
    * Récupère les tendances (ressources populaires récentes)
    */
-  getTrendingResources(days: number = 7, limit: number = 10): Array<{ resourceId: string; views: number }> {
+  async getTrendingResources(days: number = 7, limit: number = 10): Promise<Array<{ resourceId: string; views: number }>> {
+    // Si on utilise l'API backend, récupérer depuis le backend
+    if (this.useApiClient) {
+      try {
+        const response = await fetch(`${this.API_BASE_URL}/api/analytics/popular-resources?limit=${limit}&days=${days}`);
+        if (response.ok) {
+          return await response.json();
+        }
+      } catch (error) {
+        console.warn('Erreur lors de la récupération des tendances depuis le backend, fallback localStorage:', error);
+      }
+    }
+
+    // Fallback localStorage
     const cutoffDate = new Date();
     cutoffDate.setDate(cutoffDate.getDate() - days);
 
@@ -140,6 +292,9 @@ export const analyticsService = new AnalyticsService();
 
 // Track automatiquement certains événements
 if (typeof window !== 'undefined') {
+  // Retenter d'envoyer les événements en cache au chargement
+  analyticsService.retryFailedEvents();
+
   // Track les vues de page
   let lastPath = window.location.pathname;
   const trackPageView = () => {

@@ -67,5 +67,23 @@ process.on('beforeExit', async () => {
   await redis.quit();
 });
 
-export { redis };
+// Créer un client Redis séparé pour les subscriptions (nécessaire pour Socket.IO)
+let redisSubscriber: Redis;
+
+if (env.NODE_ENV === 'production') {
+  redisSubscriber = createRedisClient();
+} else {
+  // En développement, utiliser un singleton global
+  if (!global.__redisSubscriber) {
+    global.__redisSubscriber = createRedisClient();
+  }
+  redisSubscriber = global.__redisSubscriber;
+}
+
+declare global {
+  // eslint-disable-next-line no-var
+  var __redisSubscriber: Redis | undefined;
+}
+
+export { redis, redisSubscriber };
 

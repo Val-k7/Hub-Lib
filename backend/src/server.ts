@@ -3,14 +3,19 @@
  */
 
 import express from 'express';
+import { createServer } from 'http';
 import cors from 'cors';
 import helmet from 'helmet';
 import compression from 'compression';
 import { env } from './config/env.js';
 import { logger } from './utils/logger.js';
+import { initializeSocketServer } from './socket/server.js';
 
 // Créer l'application Express
 const app = express();
+
+// Créer le serveur HTTP pour Socket.IO
+const httpServer = createServer(app);
 
 // Middleware de sécurité
 app.use(helmet());
@@ -30,6 +35,9 @@ app.use(compression());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
+// Middleware de métriques (avant les routes)
+app.use(metricsMiddleware);
+
 // Health check endpoint
 app.get('/health', (_req, res) => {
   res.json({
@@ -38,6 +46,17 @@ app.get('/health', (_req, res) => {
     uptime: process.uptime(),
     environment: env.NODE_ENV,
   });
+});
+
+// Métriques Prometheus
+import { register } from './utils/metrics.js';
+app.get('/metrics', async (_req, res) => {
+  try {
+    res.set('Content-Type', register.contentType);
+    res.end(await register.metrics());
+  } catch (error) {
+    res.status(500).end('Erreur lors de la récupération des métriques');
+  }
 });
 
 // Route principale
@@ -60,8 +79,10 @@ import notificationRoutes from './routes/notifications.js';
 import adminRoutes from './routes/admin.js';
 import suggestionRoutes from './routes/suggestions.js';
 import analyticsRoutes from './routes/analytics.js';
+import migrationRoutes from './routes/migration.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { queueService } from './services/queueService.js';
+import { metricsMiddleware } from './middleware/metrics.js';
 
 // Routes
 app.use('/api/auth', authRoutes);
@@ -74,6 +95,7 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/suggestions', suggestionRoutes);
 app.use('/api/analytics', analyticsRoutes);
+app.use('/api/migration', migrationRoutes);
 
 // 404 Handler
 app.use((_req, res) => {
@@ -89,14 +111,18 @@ app.use(errorHandler);
 // Initialiser les queues Redis
 queueService.initialize();
 
-// Démarrer le serveur
+// Initialiser Socket.IO
+initializeSocketServer(httpServer);
+
+// Démarrer le serveur HTTP (Express + Socket.IO)
 const PORT = env.PORT;
 
-app.listen(PORT, () => {
+httpServer.listen(PORT, () => {
   logger.info(`🚀 Serveur démarré sur le port ${PORT}`);
   logger.info(`📍 Environnement: ${env.NODE_ENV}`);
   logger.info(`🌐 API Base URL: ${env.API_BASE_URL}`);
   logger.info(`📦 Queues Redis initialisées`);
+  logger.info(`🔌 Socket.IO initialisé`);
 });
 
 // Gestion de la fermeture propre
@@ -113,4 +139,5 @@ process.on('SIGINT', async () => {
 });
 
 export default app;
+export { httpServer };
 
