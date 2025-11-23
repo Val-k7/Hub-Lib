@@ -1,0 +1,68 @@
+# Dépendances
+node_modules
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Build output
+dist
+build
+.next
+out
+
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Documentation
+*.md
+docs/
+!README.md
+
+# Configuration locale
+.env
+.env.local
+.env.*.local
+.env.production.local
+.env.development.local
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Tests
+coverage
+.nyc_output
+*.test.ts
+*.test.tsx
+*.spec.ts
+*.spec.tsx
+
+# Logs
+*.log
+logs
+
+# Docker (garder seulement nginx config)
+docker/postgres/
+docker/redis/
+docker-compose*.yml
+!docker/nginx/
+
+# Scripts et outils
+scripts/
+Makefile
+*.lockb
+
+# Fichiers temporaires
+*.tmp
+*.temp
+.cache

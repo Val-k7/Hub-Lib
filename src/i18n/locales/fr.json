@@ -1,0 +1,171 @@
+{
+  "common": {
+    "appName": "HubLib",
+    "loading": "Chargement...",
+    "error": "Erreur",
+    "success": "Succès",
+    "cancel": "Annuler",
+    "confirm": "Confirmer",
+    "save": "Enregistrer",
+    "delete": "Supprimer",
+    "edit": "Modifier",
+    "create": "Créer",
+    "search": "Rechercher",
+    "filter": "Filtrer",
+    "close": "Fermer",
+    "back": "Retour",
+    "next": "Suivant",
+    "previous": "Précédent",
+    "submit": "Envoyer",
+    "reset": "Réinitialiser",
+    "retry": "Réessayer",
+    "home": "Accueil"
+  },
+  "nav": {
+    "home": "Accueil",
+    "browse": "Explorer",
+    "explore": "Explorer",
+    "categories": "Catégories & Tags",
+    "myResources": "Mes Ressources",
+    "resources": "Ressources",
+    "collections": "Collections",
+    "sharedWithMe": "Partagé avec moi",
+    "spaces": "Espaces",
+    "groups": "Groupes",
+    "admin": "Administration",
+    "profile": "Profil",
+    "signIn": "Se connecter",
+    "signOut": "Se déconnecter",
+    "signUp": "S'inscrire",
+    "create": "Créer",
+    "createResource": "Créer une ressource",
+    "useTemplate": "Utiliser un template",
+    "importGitHub": "Import GitHub",
+    "uploadFile": "Upload fichier"
+  },
+  "hero": {
+    "badge": "Plateforme de Partage Communautaire",
+    "title1": "Partagez & Découvrez",
+    "title2": "Vos Ressources",
+    "description": "La plateforme ultime pour centraliser, organiser et partager vos documents, fichiers, liens et ressources. Accessible à tous, simple et gratuit.",
+    "getStarted": "Commencer Gratuitement",
+    "explore": "Explorer",
+    "browseResources": "Parcourir les Ressources",
+    "stats": {
+      "resources": "Ressources Partagées",
+      "developers": "Développeurs Actifs",
+      "categories": "Catégories"
+    },
+    "trust": {
+      "easyShare": "Partage Facile",
+      "secure": "Sécurisé & Privé",
+      "free": "Gratuit pour toujours"
+    }
+  },
+  "auth": {
+    "signIn": "Se connecter",
+    "signUp": "S'inscrire",
+    "email": "Email",
+    "password": "Password",
+    "forgotPassword": "Mot de passe oublié ?",
+    "noAccount": "Pas encore de compte ?",
+    "hasAccount": "Déjà un compte ?",
+    "signInWithGitHub": "Se connecter avec GitHub",
+    "signInWithGoogle": "Se connecter avec Google",
+    "or": "ou",
+    "errors": {
+      "invalidCredentials": "Identifiants invalides",
+      "emailInUse": "Cet email est déjà utilisé",
+      "weakPassword": "Le mot de passe est trop faible",
+      "networkError": "Erreur de connexion. Vérifiez votre connexion internet."
+    }
+  },
+  "error": {
+    "title": "Oups ! Une erreur est survenue",
+    "description": "Quelque chose s'est mal passé. Nous sommes désolés pour ce désagrément.",
+    "technicalDetails": "Détails techniques",
+    "goHome": "Retour à l'accueil",
+    "generic": "Une erreur inattendue s'est produite. Veuillez réessayer.",
+    "network": "Problème de connexion. Vérifiez votre connexion internet.",
+    "unauthorized": "Vous devez être connecté pour effectuer cette action.",
+    "forbidden": "Vous n'avez pas la permission d'effectuer cette action.",
+    "validation": "Les données fournies ne sont pas valides.",
+    "notFound": "Ressource non trouvée"
+  },
+  "resources": {
+    "title": "Ressources",
+    "create": "Créer une ressource",
+    "edit": "Modifier la ressource",
+    "delete": "Supprimer la ressource",
+    "deleteConfirm": "Êtes-vous sûr de vouloir supprimer cette ressource ?",
+    "fork": "Fork",
+    "share": "Partager",
+    "download": "Télécharger",
+    "view": "Voir",
+    "rating": "Note",
+    "views": "Vues",
+    "downloads": "Téléchargements",
+    "createdAt": "Créé le",
+    "updatedAt": "Mis à jour le",
+    "author": "Auteur",
+    "category": "Catégorie",
+    "tags": "Tags",
+    "language": "Langage",
+    "license": "Licence",
+    "visibility": "Visibilité",
+    "public": "Public",
+    "private": "Privé",
+    "description": "Description",
+    "readme": "Documentation",
+    "noResources": "Aucune ressource trouvée",
+    "noResourcesDescription": "Commencez par créer votre première ressource !"
+  },
+  "profile": {
+    "title": "Profil",
+    "edit": "Modifier le profil",
+    "username": "Nom d'utilisateur",
+    "fullName": "Nom complet",
+    "bio": "Biographie",
+    "github": "GitHub",
+    "avatar": "Avatar",
+    "stats": "Statistiques",
+    "resources": "Ressources",
+    "saved": "Enregistrés",
+    "shared": "Partagés"
+  },
+  "groups": {
+    "title": "Groupes",
+    "create": "Créer un groupe",
+    "name": "Nom du groupe",
+    "description": "Description",
+    "members": "Membres",
+    "addMember": "Ajouter un membre",
+    "searchUsers": "Rechercher des utilisateurs",
+    "role": "Rôle",
+    "admin": "Administrateur",
+    "member": "Membre",
+    "noGroups": "Aucun groupe trouvé"
+  },
+  "notifications": {
+    "title": "Notifications",
+    "empty": "Aucune notification",
+    "markAsRead": "Marquer comme lu",
+    "markAllAsRead": "Tout marquer comme lu"
+  },
+  "comments": {
+    "title": "Commentaires",
+    "add": "Ajouter un commentaire",
+    "reply": "Répondre",
+    "edit": "Modifier",
+    "delete": "Supprimer",
+    "noComments": "Aucun commentaire",
+    "placeholder": "Écrivez un commentaire..."
+  },
+  "language": {
+    "title": "Langue",
+    "french": "Français",
+    "english": "English"
+  }
+}
+
+

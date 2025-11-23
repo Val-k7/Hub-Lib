@@ -1,0 +1,171 @@
+{
+  "common": {
+    "appName": "HubLib",
+    "loading": "Loading...",
+    "error": "Error",
+    "success": "Success",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "save": "Save",
+    "delete": "Delete",
+    "edit": "Edit",
+    "create": "Create",
+    "search": "Search",
+    "filter": "Filter",
+    "close": "Close",
+    "back": "Back",
+    "next": "Next",
+    "previous": "Previous",
+    "submit": "Submit",
+    "reset": "Reset",
+    "retry": "Retry",
+    "home": "Home"
+  },
+  "nav": {
+    "home": "Home",
+    "browse": "Browse",
+    "explore": "Explore",
+    "categories": "Categories & Tags",
+    "myResources": "My Resources",
+    "resources": "Resources",
+    "collections": "Collections",
+    "sharedWithMe": "Shared with me",
+    "spaces": "Spaces",
+    "groups": "Groups",
+    "admin": "Administration",
+    "profile": "Profile",
+    "signIn": "Sign in",
+    "signOut": "Sign out",
+    "signUp": "Sign up",
+    "create": "Create",
+    "createResource": "Create a resource",
+    "useTemplate": "Use a template",
+    "importGitHub": "Import GitHub",
+    "uploadFile": "Upload file"
+  },
+  "hero": {
+    "badge": "Community Sharing Platform",
+    "title1": "Share & Discover",
+    "title2": "Your Resources",
+    "description": "The ultimate platform to centralize, organize and share your documents, files, links and resources. Accessible to everyone, simple and free.",
+    "getStarted": "Get Started Free",
+    "explore": "Explore",
+    "browseResources": "Browse Resources",
+    "stats": {
+      "resources": "Shared Resources",
+      "developers": "Active Developers",
+      "categories": "Categories"
+    },
+    "trust": {
+      "easyShare": "Easy Sharing",
+      "secure": "Secure & Private",
+      "free": "Free Forever"
+    }
+  },
+  "auth": {
+    "signIn": "Sign in",
+    "signUp": "Sign up",
+    "email": "Email",
+    "password": "Password",
+    "forgotPassword": "Forgot password?",
+    "noAccount": "Don't have an account?",
+    "hasAccount": "Already have an account?",
+    "signInWithGitHub": "Sign in with GitHub",
+    "signInWithGoogle": "Sign in with Google",
+    "or": "or",
+    "errors": {
+      "invalidCredentials": "Invalid credentials",
+      "emailInUse": "This email is already in use",
+      "weakPassword": "Password is too weak",
+      "networkError": "Connection error. Please check your internet connection."
+    }
+  },
+  "error": {
+    "title": "Oops! An error occurred",
+    "description": "Something went wrong. We're sorry for the inconvenience.",
+    "technicalDetails": "Technical details",
+    "goHome": "Back to home",
+    "generic": "An unexpected error occurred. Please try again.",
+    "network": "Connection problem. Please check your internet connection.",
+    "unauthorized": "You must be logged in to perform this action.",
+    "forbidden": "You don't have permission to perform this action.",
+    "validation": "The provided data is not valid.",
+    "notFound": "Resource not found"
+  },
+  "resources": {
+    "title": "Resources",
+    "create": "Create a resource",
+    "edit": "Edit resource",
+    "delete": "Delete resource",
+    "deleteConfirm": "Are you sure you want to delete this resource?",
+    "fork": "Fork",
+    "share": "Share",
+    "download": "Download",
+    "view": "View",
+    "rating": "Rating",
+    "views": "Views",
+    "downloads": "Downloads",
+    "createdAt": "Created on",
+    "updatedAt": "Updated on",
+    "author": "Author",
+    "category": "Category",
+    "tags": "Tags",
+    "language": "Language",
+    "license": "License",
+    "visibility": "Visibility",
+    "public": "Public",
+    "private": "Private",
+    "description": "Description",
+    "readme": "Documentation",
+    "noResources": "No resources found",
+    "noResourcesDescription": "Start by creating your first resource!"
+  },
+  "profile": {
+    "title": "Profile",
+    "edit": "Edit profile",
+    "username": "Username",
+    "fullName": "Full name",
+    "bio": "Biography",
+    "github": "GitHub",
+    "avatar": "Avatar",
+    "stats": "Statistics",
+    "resources": "Resources",
+    "saved": "Saved",
+    "shared": "Shared"
+  },
+  "groups": {
+    "title": "Groups",
+    "create": "Create a group",
+    "name": "Group name",
+    "description": "Description",
+    "members": "Members",
+    "addMember": "Add member",
+    "searchUsers": "Search users",
+    "role": "Role",
+    "admin": "Administrator",
+    "member": "Member",
+    "noGroups": "No groups found"
+  },
+  "notifications": {
+    "title": "Notifications",
+    "empty": "No notifications",
+    "markAsRead": "Mark as read",
+    "markAllAsRead": "Mark all as read"
+  },
+  "comments": {
+    "title": "Comments",
+    "add": "Add a comment",
+    "reply": "Reply",
+    "edit": "Edit",
+    "delete": "Delete",
+    "noComments": "No comments",
+    "placeholder": "Write a comment..."
+  },
+  "language": {
+    "title": "Language",
+    "french": "Français",
+    "english": "English"
+  }
+}
+
+

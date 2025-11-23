@@ -1,0 +1,63 @@
+{
+  "name": "hub-lib-backend",
+  "version": "1.0.0",
+  "description": "Backend API pour Hub-Lib - Migration vers PostgreSQL et Redis",
+  "main": "dist/server.js",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:studio": "prisma studio",
+    "prisma:push": "prisma db push",
+    "lint": "eslint src --ext .ts",
+    "test": "vitest",
+    "test:coverage": "vitest --coverage"
+  },
+  "keywords": [
+    "hub-lib",
+    "api",
+    "backend",
+    "postgresql",
+    "redis"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@prisma/client": "^5.20.0",
+    "express": "^4.21.1",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "jsonwebtoken": "^9.0.2",
+    "bcryptjs": "^2.4.3",
+    "zod": "^3.25.76",
+    "ioredis": "^5.3.2",
+    "helmet": "^8.0.0",
+    "express-rate-limit": "^7.4.1",
+    "compression": "^1.7.5",
+    "winston": "^3.17.0",
+    "bullmq": "^5.25.2",
+    "socket.io": "^4.8.1",
+    "@socket.io/redis-adapter": "^8.3.0"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.0",
+    "@types/cors": "^2.8.17",
+    "@types/jsonwebtoken": "^9.0.7",
+    "@types/bcryptjs": "^2.4.6",
+    "@types/compression": "^1.7.5",
+    "@types/node": "^22.10.2",
+    "prisma": "^5.20.0",
+    "typescript": "^5.8.3",
+    "tsx": "^4.19.2",
+    "ts-node": "^10.9.2",
+    "vitest": "^4.0.13",
+    "@typescript-eslint/eslint-plugin": "^8.38.0",
+    "@typescript-eslint/parser": "^8.38.0",
+    "eslint": "^9.32.0"
+  }
+}
+
+
