@@ -59,6 +59,7 @@ import groupRoutes from './routes/groups.js';
 import notificationRoutes from './routes/notifications.js';
 import adminRoutes from './routes/admin.js';
 import suggestionRoutes from './routes/suggestions.js';
+import analyticsRoutes from './routes/analytics.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { queueService } from './services/queueService.js';
 
@@ -72,6 +73,7 @@ app.use('/api/groups', groupRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/suggestions', suggestionRoutes);
+app.use('/api/analytics', analyticsRoutes);
 
 // 404 Handler
 app.use((_req, res) => {
