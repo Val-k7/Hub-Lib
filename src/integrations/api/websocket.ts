@@ -5,6 +5,7 @@
 
 import { io, Socket } from 'socket.io-client';
 import type { NotificationCallback } from './types.js';
+import { logger } from '@/lib/logger';
 
 interface Channel {
   on(event: string, callback: NotificationCallback): {
@@ -65,7 +66,7 @@ export class WebSocketService {
       });
 
       this.socket.on('connect', () => {
-        console.log('✅ Socket.IO connecté');
+        logger.info('Socket.IO connecté');
         this.isConnecting = false;
         
         // S'abonner aux canaux existants
@@ -75,12 +76,12 @@ export class WebSocketService {
       });
 
       this.socket.on('disconnect', (reason) => {
-        console.log('Socket.IO déconnecté:', reason);
+        logger.info('Socket.IO déconnecté', { reason });
         this.isConnecting = false;
       });
 
       this.socket.on('connect_error', (error) => {
-        console.error('❌ Erreur de connexion Socket.IO:', error.message);
+        logger.error('Erreur de connexion Socket.IO', error instanceof Error ? error : new Error(error.message || String(error)));
         this.isConnecting = false;
       });
 
@@ -97,7 +98,7 @@ export class WebSocketService {
             try {
               callback(data);
             } catch (error) {
-              console.error('Erreur dans le callback de mise à jour de ressource:', error);
+              logger.error('Erreur dans le callback de mise à jour de ressource', error instanceof Error ? error : new Error(String(error)));
             }
           });
         }
@@ -111,7 +112,7 @@ export class WebSocketService {
             try {
               callback(data);
             } catch (error) {
-              console.error('Erreur dans le callback de vote:', error);
+              logger.error('Erreur dans le callback de vote', error instanceof Error ? error : new Error(String(error)));
             }
           });
         }
@@ -119,10 +120,10 @@ export class WebSocketService {
 
       // Écouter les événements d'erreur
       this.socket.on('error', (error: any) => {
-        console.error('Erreur Socket.IO:', error);
+        logger.error('Erreur Socket.IO', error instanceof Error ? error : new Error(String(error)));
       });
     } catch (error) {
-      console.error('Erreur lors de la connexion Socket.IO:', error);
+      logger.error('Erreur lors de la connexion Socket.IO', error instanceof Error ? error : new Error(String(error)));
       this.isConnecting = false;
     }
   }
@@ -139,7 +140,7 @@ export class WebSocketService {
           try {
             callback(notification);
           } catch (error) {
-            console.error('Erreur dans le callback de notification:', error);
+            logger.error('Erreur dans le callback de notification', error instanceof Error ? error : new Error(String(error)));
           }
         });
       }

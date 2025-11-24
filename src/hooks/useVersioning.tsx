@@ -46,7 +46,7 @@ export function useCreateVersion() {
       changeSummary,
     }: {
       resourceId: string;
-      resourceData: any;
+      resourceData: Partial<Resource>;
       changeSummary?: string;
     }) => {
       if (!user) throw new Error('Utilisateur non connecté');
@@ -63,7 +63,7 @@ export function useCreateVersion() {
     onError: (error: any) => {
       toast({
         title: 'Erreur',
-        description: error.message || 'Impossible de créer la version',
+        description: getErrorMessage(error) || 'Impossible de créer la version',
         variant: 'destructive',
       });
     },

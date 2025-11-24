@@ -27,6 +27,7 @@ import { FileUpload, UploadedFile } from "@/components/FileUpload";
 import { PageLoader } from "@/components/LoadingStates";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { logger } from "@/lib/logger";
 
 const categories = [
   "Documents & Fichiers",
@@ -158,7 +159,7 @@ const EditResource = () => {
 
         setExistingTags(Array.from(allTags));
       } catch (error) {
-        console.error("Erreur lors de la récupération des tags:", error);
+        logger.error("Erreur lors de la récupération des tags", undefined, error instanceof Error ? error : new Error(String(error)));
       }
     };
 
@@ -263,7 +264,7 @@ const EditResource = () => {
           });
         } catch (versionError) {
           // Ne pas bloquer la mise à jour si la création de version échoue
-          console.warn('Erreur lors de la création de la version:', versionError);
+          logger.warn('Erreur lors de la création de la version', undefined, versionError instanceof Error ? versionError : new Error(String(versionError)));
         }
       }
 

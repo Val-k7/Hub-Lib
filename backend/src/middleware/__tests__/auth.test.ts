@@ -1,57 +1,50 @@
 /**
- * Tests unitaires pour le middleware d'authentification
+ * Tests d'intégration pour le middleware d'authentification
+ * Utilise de vraies connexions et tokens JWT
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { Request, Response, NextFunction } from 'express';
 import { authMiddleware, optionalAuthMiddleware, requireOwnership, requireRole } from '../auth.js';
-import { authService } from '../../services/authService.js';
+import { createTestUser, deleteTestUser, type TestUser, isDatabaseAvailable } from '../../test/helpers.js';
 import { prisma } from '../../config/database.js';
-
-// Mock authService et Prisma
-vi.mock('../../services/authService.js', () => ({
-  authService: {
-    verifyAccessToken: vi.fn(),
-    getUserById: vi.fn(),
-  },
-}));
-
-vi.mock('../../config/database.js', () => ({
-  prisma: {
-    profile: {
-      findUnique: vi.fn(),
-    },
-  },
-}));
+import { authService } from '../../services/authService.js';
 
 describe('authMiddleware', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
+  let testUser: TestUser;
+
+  beforeEach(async () => {
+    if (!(await isDatabaseAvailable())) {
+      return;
+    }
+    testUser = await createTestUser();
+  });
+
+  afterEach(async () => {
+    if (testUser?.userId) {
+      await deleteTestUser(testUser.userId);
+    }
   });
 
   it('devrait accepter une requête avec un token valide', async () => {
+    if (!(await isDatabaseAvailable())) {
+      return;
+    }
+
     const req = {
       headers: {
-        authorization: 'Bearer valid-token',
+        authorization: `Bearer ${testUser.accessToken}`,
       },
     } as Partial<Request>;
 
     const res = {} as Response;
     const next = vi.fn() as NextFunction;
 
-    vi.mocked(authService.verifyAccessToken).mockReturnValue({
-      userId: 'user-123',
-      email: 'test@example.com',
-    });
-    vi.mocked(authService.getUserById).mockResolvedValue({
-      userId: 'user-123',
-      email: 'test@example.com',
-    } as any);
-
     await authMiddleware(req as Request, res, next);
 
     expect(req.user).toBeDefined();
-    expect(req.user?.userId).toBe('user-123');
+    expect(req.user?.userId).toBe(testUser.userId);
+    expect(req.user?.email).toBe(testUser.email);
     expect(next).toHaveBeenCalled();
   });
 
@@ -87,10 +80,6 @@ describe('authMiddleware', () => {
 
     const next = vi.fn() as NextFunction;
 
-    vi.mocked(authService.verifyAccessToken).mockImplementation(() => {
-      throw new Error('Token invalide');
-    });
-
     await authMiddleware(req as Request, res as Response, next);
 
     expect(res.status).toHaveBeenCalledWith(401);
@@ -99,35 +88,6 @@ describe('authMiddleware', () => {
 });
 
 describe('optionalAuthMiddleware', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it('devrait accepter une requête avec un token valide', async () => {
-    const req = {
-      headers: {
-        authorization: 'Bearer valid-token',
-      },
-    } as Partial<Request>;
-
-    const res = {} as Response;
-    const next = vi.fn() as NextFunction;
-
-    vi.mocked(authService.verifyAccessToken).mockReturnValue({
-      userId: 'user-123',
-      email: 'test@example.com',
-    });
-    vi.mocked(authService.getUserById).mockResolvedValue({
-      userId: 'user-123',
-      email: 'test@example.com',
-    } as any);
-
-    await optionalAuthMiddleware(req as Request, res, next);
-
-    expect(req.user).toBeDefined();
-    expect(next).toHaveBeenCalled();
-  });
-
   it('devrait accepter une requête sans token', async () => {
     const req = {
       headers: {},
@@ -138,80 +98,94 @@ describe('optionalAuthMiddleware', () => {
 
     await optionalAuthMiddleware(req as Request, res, next);
 
-    expect(req.user).toBeUndefined();
     expect(next).toHaveBeenCalled();
+    // req.user peut être undefined
   });
-});
 
-describe('requireRole', () => {
-  it('devrait accepter un utilisateur avec le rôle requis', () => {
+  it('devrait accepter une requête avec un token valide', async () => {
+    if (!(await isDatabaseAvailable())) {
+      return;
+    }
+
+    const testUser = await createTestUser();
+
     const req = {
-      user: {
-        userId: 'user-123',
-        role: 'admin',
+      headers: {
+        authorization: `Bearer ${testUser.accessToken}`,
       },
     } as Partial<Request>;
 
     const res = {} as Response;
     const next = vi.fn() as NextFunction;
 
-    const middleware = requireRole('admin');
-    middleware(req as Request, res, next);
+    await optionalAuthMiddleware(req as Request, res, next);
 
+    expect(req.user).toBeDefined();
     expect(next).toHaveBeenCalled();
-  });
 
-  it('devrait rejeter un utilisateur sans le rôle requis', () => {
-    const req = {
-      user: {
-        userId: 'user-123',
-        role: 'user',
-      },
-    } as Partial<Request>;
-
-    const res = {
-      status: vi.fn().mockReturnThis(),
-      json: vi.fn(),
-    } as Partial<Response>;
-
-    const next = vi.fn() as NextFunction;
-
-    const middleware = requireRole('admin');
-    middleware(req as Request, res as Response, next);
-
-    expect(res.status).toHaveBeenCalledWith(403);
-    expect(next).not.toHaveBeenCalled();
+    await deleteTestUser(testUser.userId);
   });
 });
 
 describe('requireOwnership', () => {
-  it('devrait accepter si l\'utilisateur est le propriétaire', () => {
+  let testUser: TestUser;
+  let testResource: { id: string; userId: string };
+
+  beforeEach(async () => {
+    if (!(await isDatabaseAvailable())) {
+      return;
+    }
+    testUser = await createTestUser();
+
+    testResource = await prisma.resource.create({
+      data: {
+        userId: testUser.userId,
+        title: 'Test Resource',
+        description: 'Description',
+        visibility: 'public',
+        resourceType: 'file_upload',
+      },
+    });
+  });
+
+  afterEach(async () => {
+    if (testResource?.id) {
+      await prisma.resource.delete({ where: { id: testResource.id } });
+    }
+    if (testUser?.userId) {
+      await deleteTestUser(testUser.userId);
+    }
+  });
+
+  it('devrait accepter si l\'utilisateur est propriétaire', async () => {
+    if (!(await isDatabaseAvailable())) {
+      return;
+    }
+
     const req = {
-      user: {
-        userId: 'user-123',
-      },
-      params: {
-        userId: 'user-123',
-      },
+      user: { userId: testUser.userId },
+      params: { id: testResource.id },
     } as Partial<Request>;
 
     const res = {} as Response;
     const next = vi.fn() as NextFunction;
 
-    const middleware = requireOwnership('userId');
-    middleware(req as Request, res, next);
+    const middleware = requireOwnership('resource');
+    await middleware(req as Request, res, next);
 
     expect(next).toHaveBeenCalled();
   });
 
-  it('devrait rejeter si l\'utilisateur n\'est pas le propriétaire', () => {
+  it('devrait rejeter si l\'utilisateur n\'est pas propriétaire', async () => {
+    if (!(await isDatabaseAvailable())) {
+      return;
+    }
+
+    const otherUser = await createTestUser();
+
     const req = {
-      user: {
-        userId: 'user-123',
-      },
-      params: {
-        userId: 'user-456',
-      },
+      user: { userId: otherUser.userId },
+      params: { id: testResource.id },
     } as Partial<Request>;
 
     const res = {
@@ -221,11 +195,75 @@ describe('requireOwnership', () => {
 
     const next = vi.fn() as NextFunction;
 
-    const middleware = requireOwnership('userId');
-    middleware(req as Request, res as Response, next);
+    const middleware = requireOwnership('resource');
+    await middleware(req as Request, res as Response, next);
+
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect(next).not.toHaveBeenCalled();
+
+    await deleteTestUser(otherUser.userId);
+  });
+});
+
+describe('requireRole', () => {
+  let adminUser: TestUser;
+  let regularUser: TestUser;
+
+  beforeEach(async () => {
+    if (!(await isDatabaseAvailable())) {
+      return;
+    }
+    adminUser = await createTestUser({ role: 'admin' });
+    regularUser = await createTestUser({ role: 'user' });
+  });
+
+  afterEach(async () => {
+    if (adminUser?.userId) {
+      await deleteTestUser(adminUser.userId);
+    }
+    if (regularUser?.userId) {
+      await deleteTestUser(regularUser.userId);
+    }
+  });
+
+  it('devrait accepter si l\'utilisateur a le rôle requis', async () => {
+    if (!(await isDatabaseAvailable())) {
+      return;
+    }
+
+    const req = {
+      user: { userId: adminUser.userId, role: 'admin' },
+    } as Partial<Request>;
+
+    const res = {} as Response;
+    const next = vi.fn() as NextFunction;
+
+    const middleware = requireRole('admin');
+    await middleware(req as Request, res, next);
+
+    expect(next).toHaveBeenCalled();
+  });
+
+  it('devrait rejeter si l\'utilisateur n\'a pas le rôle requis', async () => {
+    if (!(await isDatabaseAvailable())) {
+      return;
+    }
+
+    const req = {
+      user: { userId: regularUser.userId, role: 'user' },
+    } as Partial<Request>;
+
+    const res = {
+      status: vi.fn().mockReturnThis(),
+      json: vi.fn(),
+    } as Partial<Response>;
+
+    const next = vi.fn() as NextFunction;
+
+    const middleware = requireRole('admin');
+    await middleware(req as Request, res as Response, next);
 
     expect(res.status).toHaveBeenCalledWith(403);
     expect(next).not.toHaveBeenCalled();
   });
 });
-

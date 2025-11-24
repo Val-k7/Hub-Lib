@@ -9,6 +9,8 @@ import { Separator } from "@/components/ui/separator";
 import { Github, Mail } from "lucide-react";
 import { toast } from "sonner";
 import { FcGoogle } from "react-icons/fc";
+import { handleOAuthCallback } from "@/lib/oauth";
+import { localClient } from "@/integrations/local/client";
 
 const Auth = () => {
   const { user, signInWithGitHub, signInWithGoogle, signInWithEmail, signUpWithEmail } = useAuth();
@@ -17,6 +19,65 @@ const Auth = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+
+  // Gérer le callback OAuth
+  useEffect(() => {
+    const callbackResult = handleOAuthCallback();
+    
+    if (callbackResult) {
+      if (callbackResult.error) {
+        toast.error(callbackResult.error);
+      } else if (callbackResult.tokens) {
+        // Stocker les tokens dans localStorage pour compatibilité avec LocalClient
+        const session = {
+          access_token: callbackResult.tokens.accessToken,
+          refresh_token: callbackResult.tokens.refreshToken,
+          expires_at: Date.now() / 1000 + callbackResult.tokens.expiresIn,
+        };
+        
+        localStorage.setItem('hub-lib-api-auth', JSON.stringify(session));
+        
+        // Récupérer les informations utilisateur depuis le backend
+        const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+        fetch(`${apiUrl}/api/auth/session`, {
+          headers: {
+            'Authorization': `Bearer ${callbackResult.tokens.accessToken}`,
+          },
+        })
+          .then(res => res.json())
+          .then(data => {
+            if (data.user) {
+              // Créer une session compatible avec LocalClient
+              const localSession = {
+                access_token: callbackResult.tokens.accessToken,
+                user: {
+                  id: data.user.id,
+                  email: data.user.email,
+                  user_metadata: {
+                    full_name: data.user.fullName,
+                    avatar_url: data.user.avatarUrl,
+                  },
+                  created_at: new Date().toISOString(),
+                },
+                expires_at: Date.now() + callbackResult.tokens.expiresIn * 1000,
+              };
+              
+              localStorage.setItem('hub-lib-auth', JSON.stringify(localSession));
+              window.dispatchEvent(
+                new CustomEvent("auth-state-changed", { detail: { session: localSession } })
+              );
+              
+              toast.success("Connexion réussie !");
+              navigate("/");
+            }
+          })
+          .catch(error => {
+            logger.error('Erreur lors de la récupération du profil', undefined, error instanceof Error ? error : new Error(String(error)));
+            toast.error("Erreur lors de la connexion");
+          });
+      }
+    }
+  }, []);
 
   useEffect(() => {
     if (user) {

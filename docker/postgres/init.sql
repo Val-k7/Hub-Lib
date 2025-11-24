@@ -90,6 +90,18 @@ CREATE TABLE IF NOT EXISTS profiles (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- Table d'authentification pour stocker les mots de passe hashés
+CREATE TABLE IF NOT EXISTS auth_profiles (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID UNIQUE NOT NULL REFERENCES profiles(user_id) ON DELETE CASCADE,
+    password_hash VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Index pour auth_profiles
+CREATE INDEX IF NOT EXISTS idx_auth_profiles_user_id ON auth_profiles(user_id);
+
 -- Table des ressources
 CREATE TABLE IF NOT EXISTS resources (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -331,6 +343,27 @@ CREATE TABLE IF NOT EXISTS category_filters (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- Table des événements analytics pour stockage long terme
+CREATE TABLE IF NOT EXISTS analytics_events (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    event VARCHAR(255) NOT NULL,
+    user_id UUID REFERENCES profiles(user_id) ON DELETE SET NULL,
+    resource_id UUID REFERENCES resources(id) ON DELETE SET NULL,
+    metadata JSONB,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Table des tokens API pour authentification externe
+CREATE TABLE IF NOT EXISTS api_tokens (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES profiles(user_id) ON DELETE CASCADE,
+    token VARCHAR(255) UNIQUE NOT NULL,
+    name VARCHAR(255) NOT NULL,
+    last_used_at TIMESTAMP WITH TIME ZONE,
+    expires_at TIMESTAMP WITH TIME ZONE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
 -- =============================================================================
 -- INDEX POUR PERFORMANCE
 -- =============================================================================
@@ -415,6 +448,42 @@ CREATE INDEX IF NOT EXISTS idx_category_hierarchy_is_active ON category_hierarch
 -- Index pour category_filters
 CREATE INDEX IF NOT EXISTS idx_category_filters_category_id ON category_filters(category_id);
 
+-- Index pour analytics_events
+CREATE INDEX IF NOT EXISTS idx_analytics_events_event ON analytics_events(event);
+CREATE INDEX IF NOT EXISTS idx_analytics_events_user_id ON analytics_events(user_id);
+CREATE INDEX IF NOT EXISTS idx_analytics_events_resource_id ON analytics_events(resource_id);
+CREATE INDEX IF NOT EXISTS idx_analytics_events_created_at ON analytics_events(created_at);
+CREATE INDEX IF NOT EXISTS idx_analytics_events_event_created ON analytics_events(event, created_at);
+
+-- Index pour api_tokens
+CREATE INDEX IF NOT EXISTS idx_api_tokens_user_id ON api_tokens(user_id);
+
+-- Table des comptes OAuth liés
+CREATE TABLE IF NOT EXISTS oauth_accounts (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES profiles(user_id) ON DELETE CASCADE,
+    provider VARCHAR(50) NOT NULL CHECK (provider IN ('github', 'google')),
+    provider_user_id VARCHAR(255) NOT NULL,
+    provider_email VARCHAR(255),
+    access_token TEXT NOT NULL, -- Chiffré
+    refresh_token TEXT, -- Chiffré (optionnel selon le provider)
+    token_expires_at TIMESTAMP WITH TIME ZONE,
+    scope TEXT[], -- Scopes accordés
+    metadata JSONB, -- Infos supplémentaires (username, avatar, etc.)
+    is_primary BOOLEAN DEFAULT FALSE, -- Compte principal pour ce provider
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(user_id, provider, provider_user_id)
+);
+
+-- Index pour oauth_accounts
+CREATE INDEX IF NOT EXISTS idx_oauth_accounts_user_id ON oauth_accounts(user_id);
+CREATE INDEX IF NOT EXISTS idx_oauth_accounts_provider ON oauth_accounts(provider);
+CREATE INDEX IF NOT EXISTS idx_oauth_accounts_provider_user_id ON oauth_accounts(provider, provider_user_id);
+CREATE INDEX IF NOT EXISTS idx_oauth_accounts_is_primary ON oauth_accounts(user_id, provider, is_primary) WHERE is_primary = TRUE;
+CREATE INDEX IF NOT EXISTS idx_api_tokens_token ON api_tokens(token);
+CREATE INDEX IF NOT EXISTS idx_api_tokens_expires_at ON api_tokens(expires_at);
+
 -- =============================================================================
 -- TRIGGERS POUR UPDATED_AT AUTOMATIQUE
 -- =============================================================================
@@ -430,6 +499,9 @@ $$ language 'plpgsql';
 
 -- Triggers pour updated_at
 CREATE TRIGGER update_profiles_updated_at BEFORE UPDATE ON profiles
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_auth_profiles_updated_at BEFORE UPDATE ON auth_profiles
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 CREATE TRIGGER update_resources_updated_at BEFORE UPDATE ON resources
@@ -460,6 +532,9 @@ CREATE TRIGGER update_category_hierarchy_updated_at BEFORE UPDATE ON category_hi
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 CREATE TRIGGER update_category_filters_updated_at BEFORE UPDATE ON category_filters
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_oauth_accounts_updated_at BEFORE UPDATE ON oauth_accounts
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- =============================================================================

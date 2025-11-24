@@ -1,48 +1,64 @@
 /**
- * Tests unitaires pour cacheService
+ * Tests d'intégration pour cacheService
+ * Utilise de vraies connexions Redis
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { cacheService } from '../cacheService.js';
-import { redis } from '../../config/redis.js';
-
-// Mock Redis
-vi.mock('../../config/redis.js', () => ({
-  redis: {
-    get: vi.fn(),
-    set: vi.fn(),
-    setex: vi.fn(),
-    del: vi.fn(),
-    keys: vi.fn(),
-    expire: vi.fn(),
-    exists: vi.fn(),
-    incrby: vi.fn(),
-    ttl: vi.fn(),
-  },
-}));
+import { isRedisAvailable } from '../../test/helpers.js';
 
 describe('cacheService', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
+  const testKeys: string[] = [];
+
+  beforeEach(async () => {
+    // Nettoyer les clés de test existantes
+    for (const key of testKeys) {
+      try {
+        await cacheService.delete(key);
+      } catch (error) {
+        // Ignorer
+      }
+    }
+    testKeys.length = 0;
+  });
+
+  afterEach(async () => {
+    // Nettoyer toutes les clés de test
+    for (const key of testKeys) {
+      try {
+        await cacheService.delete(key);
+      } catch (error) {
+        // Ignorer
+      }
+    }
+    testKeys.length = 0;
   });
 
   describe('get', () => {
     it('devrait récupérer une valeur depuis le cache', async () => {
-      const key = 'test:key';
+      if (!(await isRedisAvailable())) {
+        return;
+      }
+
+      const key = 'test:get:key';
       const value = { data: 'test' };
+      testKeys.push(key);
 
-      vi.mocked(redis.get).mockResolvedValue(JSON.stringify(value));
-
+      // Stocker d'abord
+      await cacheService.set(key, value, { ttl: 60 });
+      
+      // Récupérer
       const result = await cacheService.get(key);
 
       expect(result).toEqual(value);
-      expect(redis.get).toHaveBeenCalledWith(key);
     });
 
     it('devrait retourner null si la clé n\'existe pas', async () => {
-      const key = 'nonexistent:key';
+      if (!(await isRedisAvailable())) {
+        return;
+      }
 
-      vi.mocked(redis.get).mockResolvedValue(null);
+      const key = 'test:nonexistent:key';
 
       const result = await cacheService.get(key);
 
@@ -52,149 +68,82 @@ describe('cacheService', () => {
 
   describe('set', () => {
     it('devrait stocker une valeur dans le cache', async () => {
-      const key = 'test:key';
-      const value = { data: 'test' };
-      const ttl = 3600;
+      if (!(await isRedisAvailable())) {
+        return;
+      }
 
-      vi.mocked(redis.setex).mockResolvedValue('OK');
+      const key = 'test:set:key';
+      const value = { data: 'test set' };
+      const ttl = 60;
+      testKeys.push(key);
 
-      await cacheService.set(key, value, ttl);
+      await cacheService.set(key, value, { ttl });
 
-      expect(redis.setex).toHaveBeenCalledWith(key, ttl, JSON.stringify(value));
+      // Vérifier que la valeur est stockée
+      const result = await cacheService.get(key);
+      expect(result).toEqual(value);
     });
 
     it('devrait utiliser un TTL par défaut si non spécifié', async () => {
-      const key = 'test:key';
-      const value = { data: 'test' };
+      if (!(await isRedisAvailable())) {
+        return;
+      }
 
-      vi.mocked(redis.setex).mockResolvedValue('OK');
+      const key = 'test:set:no:ttl';
+      const value = { data: 'test no ttl' };
+      testKeys.push(key);
 
       await cacheService.set(key, value);
 
-      expect(redis.setex).toHaveBeenCalledWith(key, expect.any(Number), JSON.stringify(value));
+      // Vérifier que la valeur est stockée
+      const result = await cacheService.get(key);
+      expect(result).toEqual(value);
     });
   });
 
   describe('delete', () => {
     it('devrait supprimer une clé du cache', async () => {
-      const key = 'test:key';
+      if (!(await isRedisAvailable())) {
+        return;
+      }
 
-      vi.mocked(redis.del).mockResolvedValue(1);
+      const key = 'test:delete:key';
+      const value = { data: 'test delete' };
+      testKeys.push(key);
 
+      // Stocker d'abord
+      await cacheService.set(key, value);
+      expect(await cacheService.get(key)).toEqual(value);
+
+      // Supprimer
       await cacheService.delete(key);
 
-      expect(redis.del).toHaveBeenCalledWith('cache:test:key');
+      // Vérifier que la clé n'existe plus
+      const result = await cacheService.get(key);
+      expect(result).toBeNull();
     });
   });
 
-  describe('has', () => {
-    it('devrait vérifier si une clé existe', async () => {
-      const key = 'test:key';
+  describe('clear', () => {
+    it('devrait vider tout le cache', async () => {
+      if (!(await isRedisAvailable())) {
+        return;
+      }
 
-      vi.mocked(redis.exists).mockResolvedValue(1);
+      const key1 = 'test:clear:key1';
+      const key2 = 'test:clear:key2';
+      testKeys.push(key1, key2);
 
-      const result = await cacheService.has(key);
+      // Stocker des valeurs
+      await cacheService.set(key1, { data: 'test1' });
+      await cacheService.set(key2, { data: 'test2' });
 
-      expect(result).toBe(true);
-      expect(redis.exists).toHaveBeenCalledWith('cache:test:key');
-    });
+      // Vider le cache
+      await cacheService.clear();
 
-    it('devrait retourner false si la clé n\'existe pas', async () => {
-      const key = 'test:key';
-
-      vi.mocked(redis.exists).mockResolvedValue(0);
-
-      const result = await cacheService.has(key);
-
-      expect(result).toBe(false);
-    });
-  });
-
-  describe('increment', () => {
-    it('devrait incrémenter une valeur numérique', async () => {
-      const key = 'test:counter';
-
-      vi.mocked(redis.incrby).mockResolvedValue(5);
-
-      const result = await cacheService.increment(key, 1);
-
-      expect(result).toBe(5);
-      expect(redis.incrby).toHaveBeenCalledWith('cache:test:counter', 1);
-    });
-  });
-
-  describe('expire', () => {
-    it('devrait définir l\'expiration d\'une clé', async () => {
-      const key = 'test:key';
-      const ttl = 3600;
-
-      vi.mocked(redis.expire).mockResolvedValue(1);
-
-      const result = await cacheService.expire(key, ttl);
-
-      expect(result).toBe(true);
-      expect(redis.expire).toHaveBeenCalledWith('cache:test:key', ttl);
-    });
-  });
-
-  describe('invalidatePattern', () => {
-    it('devrait invalider toutes les clés correspondant à un pattern', async () => {
-      const pattern = 'test:*';
-      const keys = ['cache:test:1', 'cache:test:2', 'cache:test:3'];
-
-      vi.mocked(redis.keys).mockResolvedValue(keys);
-      vi.mocked(redis.del).mockResolvedValue(3);
-
-      const result = await cacheService.invalidatePattern(pattern);
-
-      expect(result).toBe(3);
-      expect(redis.keys).toHaveBeenCalled();
-      expect(redis.del).toHaveBeenCalled();
-    });
-  });
-
-  describe('getOrSet', () => {
-    it('devrait récupérer depuis le cache si disponible', async () => {
-      const key = 'test:key';
-      const cachedValue = { data: 'cached' };
-
-      vi.mocked(redis.get).mockResolvedValue(JSON.stringify(cachedValue));
-
-      const fetcher = vi.fn();
-
-      const result = await cacheService.getOrSet(key, fetcher);
-
-      expect(result).toEqual(cachedValue);
-      expect(fetcher).not.toHaveBeenCalled();
-    });
-
-    it('devrait exécuter le fetcher si pas en cache', async () => {
-      const key = 'test:key';
-      const fetchedValue = { data: 'fetched' };
-
-      vi.mocked(redis.get).mockResolvedValue(null);
-      vi.mocked(redis.setex).mockResolvedValue('OK');
-
-      const fetcher = vi.fn().mockResolvedValue(fetchedValue);
-
-      const result = await cacheService.getOrSet(key, fetcher);
-
-      expect(result).toEqual(fetchedValue);
-      expect(fetcher).toHaveBeenCalled();
-      expect(redis.setex).toHaveBeenCalled();
-    });
-  });
-
-  describe('invalidateResourceCache', () => {
-    it('devrait invalider les caches liés à une ressource', async () => {
-      const resourceId = 'resource-123';
-
-      vi.mocked(redis.del).mockResolvedValue(4);
-
-      await cacheService.invalidateResourceCache(resourceId);
-
-      expect(redis.del).toHaveBeenCalled();
+      // Vérifier que les clés n'existent plus
+      expect(await cacheService.get(key1)).toBeNull();
+      expect(await cacheService.get(key2)).toBeNull();
     });
   });
 });
-

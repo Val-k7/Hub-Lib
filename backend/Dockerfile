@@ -13,8 +13,9 @@ COPY package*.json ./
 COPY tsconfig.json ./
 COPY prisma ./prisma/
 
-# Installer les dépendances
-RUN npm ci
+# Installer les dépendances (génère package-lock.json si absent)
+# Utiliser npm ci pour des builds reproductibles
+RUN npm ci --prefer-offline --no-audit || npm install --prefer-offline --no-audit
 
 # Générer le client Prisma
 RUN npx prisma generate
@@ -32,14 +33,22 @@ FROM node:20-alpine AS production
 
 WORKDIR /app
 
+# Installer OpenSSL pour Prisma (nécessaire pour Alpine)
+RUN apk add --no-cache openssl libssl3
+
 # Installer uniquement les dépendances de production
 COPY package*.json ./
-RUN npm ci --only=production
+COPY --from=builder /app/package-lock.json ./
+RUN npm ci --omit=dev --prefer-offline --no-audit || npm install --omit=dev --prefer-offline --no-audit
 
 # Copier le client Prisma généré et les fichiers nécessaires
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
+COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/dist ./dist
+
+# Copier les fichiers de configuration nécessaires
+COPY --from=builder /app/package.json ./package.json
 
 # Créer un utilisateur non-root
 RUN addgroup -g 1001 -S nodejs && \
@@ -57,11 +66,15 @@ EXPOSE 3001
 ENV NODE_ENV=production
 ENV PORT=3001
 
+# Créer le répertoire pour les uploads (sera monté comme volume dans docker-compose)
+RUN mkdir -p /app/uploads
+
 # Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
   CMD node -e "require('http').get('http://localhost:3001/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"
 
 # Commande de démarrage
 CMD ["node", "dist/server.js"]
+
 
 

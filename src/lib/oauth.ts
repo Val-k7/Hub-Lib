@@ -1,6 +1,6 @@
 /**
- * Simulation améliorée d'OAuth pour le mode local
- * Gère les tokens OAuth et les profils utilisateurs
+ * Intégration OAuth réelle avec le backend
+ * Redirige vers les routes OAuth du backend
  */
 
 export interface OAuthProfile {
@@ -13,50 +13,70 @@ export interface OAuthProfile {
 }
 
 /**
- * Simule une connexion OAuth avec un provider
- * En production, cela redirigerait vers le provider réel
- * 
- * NOTE: En mode simulation, cette fonction génère un profil aléatoire.
- * En production, cette fonction devrait récupérer les vraies données depuis l'API du provider.
+ * Redirige vers la route OAuth du backend pour initier la connexion
+ * @param provider - Le provider OAuth ('github' ou 'google')
+ * @param redirectTo - URL de redirection après authentification (optionnel)
  */
-export async function simulateOAuthLogin(
+export async function initiateOAuthLogin(
   provider: 'github' | 'google',
-  email?: string
-): Promise<OAuthProfile> {
-  // Simuler un délai de connexion
-  await new Promise(resolve => setTimeout(resolve, 500));
-
-  // En mode simulation, on génère un profil
-  // En production, on récupérerait les vraies données depuis l'API GitHub/Google
+  redirectTo?: string
+): Promise<void> {
+  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+  const oauthUrl = `${apiUrl}/api/auth/oauth/${provider}`;
   
-  // Si un email est fourni, l'utiliser (pour les tests ou la démo)
-  // Sinon, générer un email unique basé sur le timestamp
-  const profileId = `${provider}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-  const userEmail = email || `${provider}_user_${Date.now()}@example.com`;
-  const username = userEmail.split('@')[0];
-
-  // Valider que l'email est valide
-  if (!userEmail || !userEmail.includes('@') || !userEmail.includes('.')) {
-    throw new Error('Email OAuth invalide');
+  // Ajouter le paramètre state avec l'URL de redirection si fournie
+  const params = new URLSearchParams();
+  if (redirectTo) {
+    params.set('redirectTo', redirectTo);
   }
-
-  const profile: OAuthProfile = {
-    provider,
-    id: profileId,
-    email: userEmail,
-    name: provider === 'github' ? `GitHub User ${username}` : `Google User ${username}`,
-    avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${username}`,
-    username: provider === 'github' ? username : undefined,
-  };
-
-  // Stocker le profil OAuth dans sessionStorage pour cette session
-  sessionStorage.setItem(`oauth_${provider}_profile`, JSON.stringify(profile));
-
-  return profile;
+  
+  const fullUrl = params.toString() 
+    ? `${oauthUrl}?${params.toString()}`
+    : oauthUrl;
+  
+  // Rediriger vers la route OAuth du backend
+  window.location.href = fullUrl;
 }
 
 /**
- * Récupère le profil OAuth depuis sessionStorage
+ * Gère le callback OAuth depuis l'URL
+ * Récupère les tokens depuis les paramètres de l'URL et les stocke
+ * @returns Les tokens OAuth ou null si erreur
+ */
+export function handleOAuthCallback(): { tokens?: { accessToken: string; refreshToken: string; expiresIn: number }; error?: string } | null {
+  const urlParams = new URLSearchParams(window.location.search);
+  const oauthParam = urlParams.get('oauth');
+  const tokensParam = urlParams.get('tokens');
+  const errorParam = urlParams.get('error');
+  const messageParam = urlParams.get('message');
+
+  // Nettoyer l'URL
+  const cleanUrl = window.location.pathname;
+  window.history.replaceState({}, document.title, cleanUrl);
+
+  if (errorParam) {
+    return {
+      error: messageParam ? decodeURIComponent(messageParam) : 'Erreur OAuth',
+    };
+  }
+
+  if (oauthParam === 'success' && tokensParam) {
+    try {
+      const tokens = JSON.parse(decodeURIComponent(tokensParam));
+      return { tokens };
+    } catch (error) {
+      return {
+        error: 'Erreur lors du parsing des tokens',
+      };
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Récupère le profil OAuth depuis sessionStorage (pour compatibilité)
+ * @deprecated Utiliser les tokens JWT du backend
  */
 export function getOAuthProfile(provider: 'github' | 'google'): OAuthProfile | null {
   const stored = sessionStorage.getItem(`oauth_${provider}_profile`);
@@ -64,25 +84,40 @@ export function getOAuthProfile(provider: 'github' | 'google'): OAuthProfile | n
 }
 
 /**
- * Nettoie le profil OAuth
+ * Nettoie le profil OAuth (pour compatibilité)
+ * @deprecated
  */
 export function clearOAuthProfile(provider: 'github' | 'google'): void {
   sessionStorage.removeItem(`oauth_${provider}_profile`);
 }
 
 /**
- * Valide un token OAuth (simulation)
+ * @deprecated Utiliser initiateOAuthLogin() à la place
+ * Cette fonction est conservée pour compatibilité mais redirige vers le backend
+ */
+export async function simulateOAuthLogin(
+  provider: 'github' | 'google',
+  email?: string
+): Promise<OAuthProfile> {
+  // En production, rediriger vers le backend
+  await initiateOAuthLogin(provider);
+  
+  // Cette ligne ne sera jamais atteinte car initiateOAuthLogin redirige
+  // Mais TypeScript nécessite un retour
+  throw new Error('Redirection OAuth en cours');
+}
+
+/**
+ * @deprecated
  */
 export function validateOAuthToken(token: string, provider: 'github' | 'google'): boolean {
-  // En production, cela validerait le token avec l'API du provider
-  // Pour la simulation, on vérifie juste le format
+  // En production, les tokens sont validés par le backend
   return token.startsWith(`${provider}_token_`);
 }
 
 /**
- * Génère un token OAuth simulé
+ * @deprecated
  */
 export function generateOAuthToken(provider: 'github' | 'google'): string {
   return `${provider}_token_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 }
-

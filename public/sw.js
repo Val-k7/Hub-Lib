@@ -1,7 +1,7 @@
 // Service Worker pour Hub-Lib
 // Cache des assets statiques et mode offline basique
 
-const CACHE_NAME = 'hub-lib-v1';
+const CACHE_NAME = 'hub-lib-v2'; // Incrémenter pour forcer la mise à jour
 const STATIC_ASSETS = [
   '/',
   '/index.html',
@@ -42,7 +42,8 @@ async function networkFirst(request) {
     const networkResponse = await fetch(request);
     
     // Mettre en cache les réponses réussies
-    if (networkResponse.ok) {
+    // Ignorer les requêtes chrome-extension et autres schémas non-HTTP(S)
+    if (networkResponse.ok && (request.url.startsWith('http://') || request.url.startsWith('https://'))) {
       const cache = await caches.open(CACHE_NAME);
       cache.put(request, networkResponse.clone());
     }
@@ -71,6 +72,22 @@ async function networkFirst(request) {
 self.addEventListener('fetch', (event) => {
   const { request } = event;
   const url = new URL(request.url);
+
+  // Ignorer les requêtes non-HTTP(S) (chrome-extension, etc.)
+  if (!url.protocol.startsWith('http')) {
+    return;
+  }
+
+  // Ne PAS intercepter les callbacks OAuth - laisser passer directement au réseau
+  // Ces routes doivent être gérées directement par le serveur sans intervention du SW
+  if (
+    url.pathname.includes('/api/auth/oauth/callback/') ||
+    url.pathname.includes('/api/auth/oauth/github') ||
+    url.pathname.includes('/api/auth/oauth/google')
+  ) {
+    // Ne pas intercepter du tout - laisser la requête passer directement
+    return;
+  }
 
   // Ne pas mettre en cache les requêtes vers l'API ou les données dynamiques
   if (url.pathname.startsWith('/api/') || url.pathname.includes('localStorage')) {

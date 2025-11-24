@@ -2,7 +2,7 @@
  * Routes d'administration
  */
 
-import express from 'express';
+import express, { Request, Response } from 'express';
 import { z } from 'zod';
 import { prisma } from '../config/database.js';
 import { authMiddleware, requireRole } from '../middleware/auth.js';
@@ -28,7 +28,7 @@ const updateConfigSchema = z.object({
  */
 router.get(
   '/stats',
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (_req: Request, res: Response) => {
     const [
       totalUsers,
       totalResources,
@@ -87,7 +87,7 @@ router.get(
  */
 router.get(
   '/config',
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (_req: Request, res: Response) => {
     const configs = await prisma.adminConfig.findMany({
       orderBy: {
         key: 'asc',
@@ -114,7 +114,7 @@ router.get(
  */
 router.put(
   '/config/:key',
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: Request, res: Response) => {
     const { key } = req.params;
     const data = updateConfigSchema.parse(req.body);
 
@@ -142,7 +142,7 @@ router.put(
  */
 router.get(
   '/suggestions',
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: Request, res: Response) => {
     const status = req.query.status as string | undefined;
     const type = req.query.type as string | undefined;
     const page = parseInt(req.query.page as string) || 1;
@@ -212,12 +212,84 @@ router.get(
 );
 
 /**
+ * POST /api/admin/seed-suggestions
+ * Créer des suggestions pré-approuvées pour le seeding initial
+ */
+router.post(
+  '/seed-suggestions',
+  asyncHandler(async (req: Request, res: Response) => {
+    if (!req.user) {
+      throw new AppError('Authentification requise', 401);
+    }
+
+    const { suggestions } = req.body;
+
+    if (!Array.isArray(suggestions)) {
+      throw new AppError('suggestions doit être un tableau', 400);
+    }
+
+    const created = [];
+
+    for (const suggestion of suggestions) {
+      // Vérifier si une suggestion avec le même nom et type existe déjà
+      const existing = await prisma.categoryTagSuggestion.findUnique({
+        where: {
+          name_type: {
+            name: suggestion.name,
+            type: suggestion.type,
+          },
+        },
+      });
+
+      if (existing) {
+        // Si elle existe déjà et est approuvée, on la skip
+        if (existing.status === 'approved') {
+          continue;
+        }
+        // Sinon, on la met à jour
+        const updated = await prisma.categoryTagSuggestion.update({
+          where: { id: existing.id },
+          data: {
+            description: suggestion.description,
+            status: 'approved',
+            votesCount: suggestion.votesCount || 0,
+            reviewedBy: req.user.userId,
+            reviewedAt: new Date(),
+          },
+        });
+        created.push(updated);
+      } else {
+        // Créer une nouvelle suggestion approuvée
+        const newSuggestion = await prisma.categoryTagSuggestion.create({
+          data: {
+            name: suggestion.name,
+            description: suggestion.description,
+            type: suggestion.type,
+            status: 'approved',
+            suggestedBy: req.user.userId,
+            votesCount: suggestion.votesCount || 0,
+            reviewedBy: req.user.userId,
+            reviewedAt: new Date(),
+          },
+        });
+        created.push(newSuggestion);
+      }
+    }
+
+    res.status(201).json({
+      message: `${created.length} suggestions créées/mises à jour`,
+      suggestions: created,
+    });
+  })
+);
+
+/**
  * PUT /api/admin/suggestions/:id/approve
  * Approuver une suggestion
  */
 router.put(
   '/suggestions/:id/approve',
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: Request, res: Response) => {
     if (!req.user) {
       throw new AppError('Authentification requise', 401, 'AUTH_REQUIRED');
     }
@@ -251,7 +323,7 @@ router.put(
  */
 router.put(
   '/suggestions/:id/reject',
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: Request, res: Response) => {
     if (!req.user) {
       throw new AppError('Authentification requise', 401, 'AUTH_REQUIRED');
     }
@@ -285,7 +357,7 @@ router.put(
  */
 router.get(
   '/users',
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: Request, res: Response) => {
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 20;
     const skip = (page - 1) * limit;
@@ -349,7 +421,7 @@ router.get(
  */
 router.put(
   '/users/:id/role',
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: Request, res: Response) => {
     const { id } = req.params;
     const { role } = req.body;
 
@@ -373,5 +445,6 @@ router.put(
 );
 
 export default router;
+
 
 

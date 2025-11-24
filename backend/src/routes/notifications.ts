@@ -3,6 +3,7 @@
  */
 
 import express from 'express';
+import { Request, Response } from 'express';
 import { z } from 'zod';
 import { prisma } from '../config/database.js';
 import { authMiddleware } from '../middleware/auth.js';
@@ -28,7 +29,7 @@ router.get(
   '/',
   authMiddleware,
   generalRateLimit,
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: Request, res: Response) => {
     if (!req.user) {
       throw new AppError('Authentification requise', 401, 'AUTH_REQUIRED');
     }
@@ -102,7 +103,7 @@ router.get(
   '/unread-count',
   authMiddleware,
   generalRateLimit,
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: Request, res: Response) => {
     if (!req.user) {
       throw new AppError('Authentification requise', 401, 'AUTH_REQUIRED');
     }
@@ -126,7 +127,7 @@ router.put(
   '/:id/read',
   authMiddleware,
   generalRateLimit,
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: Request, res: Response) => {
     if (!req.user) {
       throw new AppError('Authentification requise', 401, 'AUTH_REQUIRED');
     }
@@ -165,7 +166,7 @@ router.put(
   '/read-all',
   authMiddleware,
   generalRateLimit,
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: Request, res: Response) => {
     if (!req.user) {
       throw new AppError('Authentification requise', 401, 'AUTH_REQUIRED');
     }
@@ -195,7 +196,7 @@ router.delete(
   '/:id',
   authMiddleware,
   generalRateLimit,
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: Request, res: Response) => {
     if (!req.user) {
       throw new AppError('Authentification requise', 401, 'AUTH_REQUIRED');
     }
@@ -224,5 +225,6 @@ router.delete(
 );
 
 export default router;
+
 
 

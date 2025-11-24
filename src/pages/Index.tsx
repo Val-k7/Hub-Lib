@@ -1,34 +1,21 @@
-import { Header } from "@/components/Header";
-import { Hero } from "@/components/Hero";
-import { HowItWorks } from "@/components/HowItWorks";
-import { Features } from "@/components/Features";
-import { HomeRecommendations } from "@/components/HomeRecommendations";
-import { TopSuggestionsSection } from "@/components/TopSuggestionsSection";
-import { Categories } from "@/components/Categories";
-import { CTA } from "@/components/CTA";
-import { Footer } from "@/components/Footer";
 import { useAuth } from "@/hooks/useAuth";
+import { HomeGuest } from "./HomeGuest";
+import { HomeUser } from "./HomeUser";
 
 const Index = () => {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
 
-  return (
-    <div className="min-h-screen">
-      <Header />
-      <Hero />
-      <HomeRecommendations />
-      <TopSuggestionsSection />
-      {!user && (
-        <>
-          <HowItWorks />
-          <Features />
-        </>
-      )}
-      <Categories />
-      {!user && <CTA />}
-      <Footer />
-    </div>
-  );
+  // Afficher un loader pendant la vérification de l'authentification
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-pulse text-muted-foreground">Chargement...</div>
+      </div>
+    );
+  }
+
+  // Afficher la page appropriée selon le statut de l'utilisateur
+  return user ? <HomeUser /> : <HomeGuest />;
 };
 
 export default Index;

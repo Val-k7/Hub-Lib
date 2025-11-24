@@ -10,7 +10,6 @@ import { notificationService } from './notificationService.js';
 import { queueService, JobType } from './queueService.js';
 
 class VoteService {
-  private readonly VOTE_PREFIX = 'vote:';
   private readonly SUGGESTION_PREFIX = 'suggestion:';
 
   /**
@@ -127,8 +126,9 @@ class VoteService {
         totalDownvotes,
         userVote,
       };
-    } catch (error: any) {
-      logger.error(`Erreur lors du vote sur la suggestion: ${error.message}`);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue';
+      logger.error(`Erreur lors du vote sur la suggestion: ${errorMessage}`);
       throw error;
     }
   }
@@ -171,8 +171,9 @@ class VoteService {
       await redis.setex(cacheKey, 300, JSON.stringify(result)); // TTL: 5 minutes
 
       return result;
-    } catch (error: any) {
-      logger.error(`Erreur lors de la récupération des votes: ${error.message}`);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue';
+      logger.error(`Erreur lors de la récupération des votes: ${errorMessage}`);
       throw error;
     }
   }
@@ -192,8 +193,9 @@ class VoteService {
       });
 
       return vote?.voteType || null;
-    } catch (error: any) {
-      logger.error(`Erreur lors de la récupération du vote utilisateur: ${error.message}`);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue';
+      logger.error(`Erreur lors de la récupération du vote utilisateur: ${errorMessage}`);
       return null;
     }
   }
@@ -213,8 +215,9 @@ class VoteService {
         300, // TTL: 5 minutes
         JSON.stringify({ totalUpvotes, totalDownvotes })
       );
-    } catch (error: any) {
-      logger.error(`Erreur lors de la mise à jour du cache: ${error.message}`);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue';
+      logger.error(`Erreur lors de la mise à jour du cache: ${errorMessage}`);
     }
   }
 
@@ -262,5 +265,6 @@ class VoteService {
 }
 
 export const voteService = new VoteService();
+
 
 

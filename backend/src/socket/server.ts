@@ -10,7 +10,6 @@ import { redis } from '../config/redis.js';
 import { redisSubscriber } from '../config/redis.js';
 import { logger } from '../utils/logger.js';
 import { authService } from '../services/authService.js';
-import { prisma } from '../config/database.js';
 
 export interface SocketAuth {
   userId: string;
@@ -92,32 +91,32 @@ export function initializeSocketServer(httpServer: HTTPServer): SocketIOServer {
     socket.join(`user:${userId}`);
 
     // Gestion de la souscription aux canaux
-    socket.on('subscribe', async (channel: string) => {
+    (socket as any).on('subscribe', async (channel: string) => {
       try {
         // Valider le canal (sécurité)
         if (!isValidChannel(channel, userId)) {
-          socket.emit('error', { message: 'Canal non autorisé' });
+          (socket as any).emit('error', { message: 'Canal non autorisé' });
           return;
         }
 
         socket.join(channel);
         logger.debug(`📡 Socket ${socket.id} s'est abonné au canal ${channel}`);
-        socket.emit('subscribed', { channel });
+        (socket as any).emit('subscribed', { channel });
       } catch (error: any) {
         logger.error(`Erreur lors de la souscription: ${error.message}`);
-        socket.emit('error', { message: 'Erreur lors de la souscription' });
+        (socket as any).emit('error', { message: 'Erreur lors de la souscription' });
       }
     });
 
     // Gestion du désabonnement
-    socket.on('unsubscribe', (channel: string) => {
+    (socket as any).on('unsubscribe', (channel: string) => {
       socket.leave(channel);
       logger.debug(`📡 Socket ${socket.id} s'est désabonné du canal ${channel}`);
-      socket.emit('unsubscribed', { channel });
+      (socket as any).emit('unsubscribed', { channel });
     });
 
     // Écouter les mises à jour de ressources
-    socket.on('subscribe:resource', (resourceId: string) => {
+    (socket as any).on('subscribe:resource', (resourceId: string) => {
       if (!resourceId || typeof resourceId !== 'string') {
         return;
       }
@@ -127,7 +126,7 @@ export function initializeSocketServer(httpServer: HTTPServer): SocketIOServer {
     });
 
     // Écouter les votes sur suggestions
-    socket.on('subscribe:suggestions', () => {
+    (socket as any).on('subscribe:suggestions', () => {
       socket.join('suggestions:votes');
       logger.debug(`📡 Socket ${socket.id} s'est abonné aux votes de suggestions`);
     });
@@ -198,7 +197,7 @@ function setupRedisSubscriptions(io: SocketIOServer) {
   });
 
   // S'abonner aux votes sur suggestions
-  subscriber.subscribe('suggestions:votes', (err, count) => {
+  subscriber.subscribe('suggestions:votes', (err) => {
     if (err) {
       logger.error('Erreur lors de l\'abonnement aux votes:', err);
     } else {

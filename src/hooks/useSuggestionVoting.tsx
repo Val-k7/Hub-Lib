@@ -3,6 +3,8 @@ import { localClient } from "@/integrations/local/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { adminConfigService } from "@/services/adminConfigService";
+import { getErrorMessage } from "@/types/errors";
+import type { SuggestionVote } from "@/types/votes";
 
 type VoteType = "upvote" | "downvote" | null;
 
@@ -57,8 +59,8 @@ export const useSuggestionVoting = () => {
         .eq("suggestion_id", suggestionId)
         .execute();
 
-      const upvotes = (allVotes || []).filter((v: any) => v.vote_type === "upvote").length;
-      const downvotes = (allVotes || []).filter((v: any) => v.vote_type === "downvote").length;
+      const upvotes = (allVotes || []).filter((v) => v.vote_type === "upvote").length;
+      const downvotes = (allVotes || []).filter((v) => v.vote_type === "downvote").length;
       const currentScore = upvotes - downvotes;
 
       // Gérer le vote
@@ -97,8 +99,9 @@ export const useSuggestionVoting = () => {
         .eq("suggestion_id", suggestionId)
         .execute();
 
-      const newUpvotes = (updatedVotes || []).filter((v: any) => v.vote_type === "upvote").length;
-      const newDownvotes = (updatedVotes || []).filter((v: any) => v.vote_type === "downvote").length;
+      const votes = (updatedVotes || []) as Array<{ vote_type: string }>;
+      const newUpvotes = votes.filter((v) => v.vote_type === "upvote").length;
+      const newDownvotes = votes.filter((v) => v.vote_type === "downvote").length;
       const newScore = newUpvotes - newDownvotes;
       const newVotesCount = newUpvotes + newDownvotes;
 
@@ -172,7 +175,7 @@ export const useSuggestionVoting = () => {
         });
       }
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       toast({
         title: "Erreur",
         description: error.message || "Impossible d'enregistrer le vote",

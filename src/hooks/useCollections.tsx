@@ -68,10 +68,10 @@ export function useCreateCollection() {
         description: 'Votre collection a été créée avec succès',
       });
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       toast({
         title: 'Erreur',
-        description: error.message || 'Impossible de créer la collection',
+        description: getErrorMessage(error) || 'Impossible de créer la collection',
         variant: 'destructive',
       });
     },
@@ -98,7 +98,7 @@ export function useUpdateCollection() {
         description: 'Votre collection a été mise à jour',
       });
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       toast({
         title: 'Erreur',
         description: error.message || 'Impossible de mettre à jour la collection',
@@ -124,7 +124,7 @@ export function useDeleteCollection() {
         description: 'Votre collection a été supprimée',
       });
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       toast({
         title: 'Erreur',
         description: error.message || 'Impossible de supprimer la collection',
@@ -152,7 +152,7 @@ export function useAddResourceToCollection() {
         description: 'La ressource a été ajoutée à la collection',
       });
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       toast({
         title: 'Erreur',
         description: error.message || 'Impossible d\'ajouter la ressource',
@@ -180,7 +180,7 @@ export function useRemoveResourceFromCollection() {
         description: 'La ressource a été retirée de la collection',
       });
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       toast({
         title: 'Erreur',
         description: error.message || 'Impossible de retirer la ressource',

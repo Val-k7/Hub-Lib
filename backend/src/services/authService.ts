@@ -9,6 +9,8 @@ import { prisma } from '../config/database.js';
 import { sessionService } from './sessionService.js';
 import { logger } from '../utils/logger.js';
 import { z } from 'zod';
+import { AppRole } from '@prisma/client';
+import type { AuthUser, SignUpResponse, SignInResponse } from '../types/auth.js';
 
 // Schémas de validation
 export const signUpSchema = z.object({
@@ -32,7 +34,7 @@ export interface AuthTokens {
 export interface JWTPayload {
   userId: string;
   email: string;
-  role?: string;
+  role?: AppRole;
 }
 
 class AuthService {
@@ -56,8 +58,8 @@ class AuthService {
    */
   generateAccessToken(payload: JWTPayload): string {
     return jwt.sign(payload, env.JWT_SECRET, {
-      expiresIn: env.JWT_EXPIRES_IN,
-    });
+      expiresIn: env.JWT_EXPIRES_IN as string,
+    } as jwt.SignOptions);
   }
 
   /**
@@ -65,8 +67,8 @@ class AuthService {
    */
   generateRefreshToken(payload: JWTPayload): string {
     return jwt.sign(payload, env.JWT_REFRESH_SECRET, {
-      expiresIn: env.JWT_REFRESH_EXPIRES_IN,
-    });
+      expiresIn: env.JWT_REFRESH_EXPIRES_IN as string,
+    } as jwt.SignOptions);
   }
 
   /**
@@ -99,7 +101,7 @@ class AuthService {
     password: string;
     username?: string;
     fullName?: string;
-  }): Promise<{ user: any; tokens: AuthTokens }> {
+  }): Promise<SignUpResponse> {
     // Valider les données
     const validatedData = signUpSchema.parse(data);
 
@@ -122,9 +124,6 @@ class AuthService {
         throw new Error('Ce nom d\'utilisateur est déjà pris');
       }
     }
-
-    // Hasher le mot de passe
-    const hashedPassword = await this.hashPassword(validatedData.password);
 
     // Créer l'utilisateur et le profil en transaction
     const result = await prisma.$transaction(async (tx) => {
@@ -149,23 +148,49 @@ class AuthService {
         },
       });
 
-      // TODO: Stocker le mot de passe hashé dans une table d'authentification séparée
-      // Pour l'instant, on suppose qu'il y a une table auth_profiles ou similaire
-      // Cette partie dépendra de votre système d'authentification
+      // Stocker le mot de passe hashé dans la table d'authentification
+      const passwordHash = await this.hashPassword(validatedData.password);
+      await tx.authProfile.create({
+        data: {
+          userId,
+          passwordHash,
+        },
+      });
 
       return profile;
     });
 
-    // Générer les tokens
+    // Récupérer le rôle de l'utilisateur
+    const userRole = await prisma.userRole.findUnique({
+      where: { userId: result.userId },
+    });
+
+    // Générer les tokens avec le rôle
     const tokens = await this.generateTokens({
       userId: result.userId,
       email: result.email,
+      role: userRole?.role || 'user',
     });
 
     // Stocker la session dans Redis
     await sessionService.createSession(result.userId, tokens.refreshToken);
 
     logger.info(`Nouvel utilisateur inscrit: ${result.email}`);
+
+    // Envoyer un email de bienvenue de manière asynchrone
+    try {
+      const { emailService } = await import('./emailService.js');
+      emailService.sendWelcomeEmail(result.email, {
+        name: result.fullName || undefined,
+        username: result.username || undefined,
+      }).catch((error) => {
+        // Ne pas bloquer l'inscription si l'email échoue
+        logger.warn(`Échec de l'envoi de l'email de bienvenue à ${result.email}:`, error);
+      });
+    } catch (error) {
+      // Ignorer les erreurs d'import si le service n'est pas disponible
+      logger.debug('Service email non disponible pour l\'envoi de bienvenue');
+    }
 
     return {
       user: {
@@ -182,7 +207,7 @@ class AuthService {
   /**
    * Connexion d'un utilisateur
    */
-  async signIn(email: string, password: string): Promise<{ user: any; tokens: AuthTokens }> {
+  async signIn(email: string, password: string): Promise<SignInResponse> {
     // Valider les données
     const validatedData = signInSchema.parse({ email, password });
 
@@ -198,13 +223,19 @@ class AuthService {
       throw new Error('Email ou mot de passe incorrect');
     }
 
-    // TODO: Vérifier le mot de passe depuis la table d'authentification
-    // Pour l'instant, on suppose qu'il y a une table auth_profiles
-    // Cette partie dépendra de votre système d'authentification
-    // const isValidPassword = await this.verifyPassword(validatedData.password, authData.passwordHash);
-    // if (!isValidPassword) {
-    //   throw new Error('Email ou mot de passe incorrect');
-    // }
+    // Vérifier le mot de passe depuis la table d'authentification
+    const authProfile = await prisma.authProfile.findUnique({
+      where: { userId: profile.userId },
+    });
+
+    if (!authProfile) {
+      throw new Error('Email ou mot de passe incorrect');
+    }
+
+    const isValidPassword = await this.verifyPassword(validatedData.password, authProfile.passwordHash);
+    if (!isValidPassword) {
+      throw new Error('Email ou mot de passe incorrect');
+    }
 
     // Générer les tokens
     const tokens = await this.generateTokens({
@@ -279,9 +310,9 @@ class AuthService {
   }
 
   /**
-   * Génère les tokens d'accès et de rafraîchissement
+   * Génère les tokens d'accès et de rafraîchissement (public pour OAuth)
    */
-  private async generateTokens(payload: JWTPayload): Promise<AuthTokens> {
+  async generateTokens(payload: JWTPayload): Promise<AuthTokens> {
     const accessToken = this.generateAccessToken(payload);
     const refreshToken = this.generateRefreshToken(payload);
 
@@ -354,8 +385,34 @@ class AuthService {
       role: profile.userRole?.role,
     };
   }
+
+  /**
+   * Récupère un utilisateur par son email (pour OAuth)
+   */
+  async getUserByEmail(email: string): Promise<any | null> {
+    const profile = await prisma.profile.findUnique({
+      where: { email },
+      include: {
+        userRole: true,
+      },
+    });
+
+    if (!profile) return null;
+
+    return {
+      id: profile.id,
+      userId: profile.userId,
+      email: profile.email,
+      username: profile.username,
+      fullName: profile.fullName,
+      avatarUrl: profile.avatarUrl,
+      bio: profile.bio,
+      role: profile.userRole?.role,
+    };
+  }
 }
 
 export const authService = new AuthService();
+
 
 

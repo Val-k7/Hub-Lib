@@ -18,7 +18,17 @@ const app = express();
 const httpServer = createServer(app);
 
 // Middleware de sécurité
-app.use(helmet());
+// Configuration Helmet pour HTTPS
+app.use(helmet({
+  crossOriginOpenerPolicy: { policy: 'same-origin-allow-popups' },
+  crossOriginEmbedderPolicy: false, // Peut causer des problèmes avec certaines intégrations
+  originAgentCluster: true,
+  strictTransportSecurity: {
+    maxAge: 31536000,
+    includeSubDomains: true,
+    preload: true,
+  },
+}));
 
 // CORS
 const corsOptions = {
@@ -38,13 +48,23 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 // Middleware de métriques (avant les routes)
 app.use(metricsMiddleware);
 
-// Health check endpoint
+// Health check endpoints
 app.get('/health', (_req, res) => {
   res.json({
     status: 'ok',
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
     environment: env.NODE_ENV,
+  });
+});
+
+app.get('/api/health', (_req, res) => {
+  res.json({
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    environment: env.NODE_ENV,
+    version: '1.0.0',
   });
 });
 
@@ -80,9 +100,22 @@ import adminRoutes from './routes/admin.js';
 import suggestionRoutes from './routes/suggestions.js';
 import analyticsRoutes from './routes/analytics.js';
 import migrationRoutes from './routes/migration.js';
+import apiTokenRoutes from './routes/apiTokens.js';
+import categoryRoutes from './routes/categories.js';
+import fileRoutes from './routes/files.js';
+import backupRoutes from './routes/backups.js';
+import monitoringRoutes from './routes/monitoring.js';
+import oauthAccountsRoutes from './routes/oauthAccounts.js';
+import githubRoutes from './routes/github.js';
+import googleDriveRoutes from './routes/googleDrive.js';
+import templateRoutes from './routes/templates.js';
+import permissionRoutes from './routes/permissions.js';
 import { errorHandler } from './middleware/errorHandler.js';
+import swaggerUi from 'swagger-ui-express';
+import { swaggerSpec } from './config/swagger.js';
 import { queueService } from './services/queueService.js';
 import { metricsMiddleware } from './middleware/metrics.js';
+import { monitoringService } from './services/monitoringService.js';
 
 // Routes
 app.use('/api/auth', authRoutes);
@@ -96,6 +129,29 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/suggestions', suggestionRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/migration', migrationRoutes);
+app.use('/api/api-tokens', apiTokenRoutes);
+app.use('/api/categories', categoryRoutes);
+app.use('/api/files', fileRoutes);
+app.use('/api/backups', backupRoutes);
+app.use('/api/monitoring', monitoringRoutes);
+app.use('/api/oauth-accounts', oauthAccountsRoutes);
+app.use('/api/github', githubRoutes);
+app.use('/api/google-drive', googleDriveRoutes);
+app.use('/api/templates', templateRoutes);
+app.use('/api/permissions', permissionRoutes);
+
+// Documentation Swagger/OpenAPI
+app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
+  customCss: '.swagger-ui .topbar { display: none }',
+  customSiteTitle: 'Hub-Lib API Documentation',
+  customfavIcon: '/favicon.ico',
+}));
+
+// Endpoint JSON pour la spécification OpenAPI
+app.get('/api/docs.json', (_req, res) => {
+  res.setHeader('Content-Type', 'application/json');
+  res.send(swaggerSpec);
+});
 
 // 404 Handler
 app.use((_req, res) => {
@@ -113,6 +169,12 @@ queueService.initialize();
 
 // Initialiser Socket.IO
 initializeSocketServer(httpServer);
+
+// Démarrer le monitoring
+if (env.NODE_ENV === 'production') {
+  monitoringService.startMonitoring(60000); // Vérifier toutes les minutes
+  logger.info('📊 Monitoring démarré');
+}
 
 // Démarrer le serveur HTTP (Express + Socket.IO)
 const PORT = env.PORT;

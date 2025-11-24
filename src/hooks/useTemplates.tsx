@@ -51,10 +51,10 @@ export function useCreateFromTemplate() {
         description: 'Votre ressource a été créée depuis le template',
       });
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       toast({
         title: 'Erreur',
-        description: error.message || 'Impossible de créer la ressource',
+        description: getErrorMessage(error) || 'Impossible de créer la ressource',
         variant: 'destructive',
       });
     },

@@ -75,7 +75,7 @@ function defaultKeyGenerator(req: Request): string {
 }
 
 /**
- * Rate limiting strict pour les endpoints d'authentification
+ * Rate limiting strict pour les endpoints d'authentification (signup/signin)
  */
 export const authRateLimit = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
@@ -84,6 +84,20 @@ export const authRateLimit = rateLimit({
   keyGenerator: (req) => {
     const ip = req.ip || req.socket.remoteAddress || 'unknown';
     return `auth:${ip}`;
+  },
+});
+
+/**
+ * Rate limiting plus permissif pour les endpoints OAuth
+ * OAuth nécessite plusieurs redirections, donc on autorise plus de requêtes
+ */
+export const oauthRateLimit = rateLimit({
+  windowMs: 5 * 60 * 1000, // 5 minutes
+  maxRequests: 20, // 20 tentatives max (pour gérer les redirections OAuth)
+  message: 'Trop de tentatives OAuth, veuillez réessayer dans 5 minutes',
+  keyGenerator: (req) => {
+    const ip = req.ip || req.socket.remoteAddress || 'unknown';
+    return `oauth:${ip}`;
   },
 });
 
@@ -103,5 +117,6 @@ export const strictRateLimit = rateLimit({
   maxRequests: 10, // 10 requêtes max par minute
   message: 'Trop de requêtes sur cet endpoint sensible',
 });
+
 
 

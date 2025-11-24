@@ -2,7 +2,7 @@
  * Service de gestion du versioning des ressources
  */
 
-import { client } from.*client';
+import { client } from '@/integrations/client';
 
 export interface ResourceVersion {
   id: string;

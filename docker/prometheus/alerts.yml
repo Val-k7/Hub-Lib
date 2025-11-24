@@ -1,0 +1,76 @@
+# Règles d'alerte Prometheus pour Hub-Lib
+
+groups:
+  - name: hub-lib-alerts
+    interval: 30s
+    rules:
+      # Alerte si le backend est down
+      - alert: BackendDown
+        expr: up{job="hub-lib-backend"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Backend Hub-Lib est down"
+          description: "Le backend n'est pas accessible depuis {{ $for }}"
+
+      # Alerte si utilisation CPU élevée
+      - alert: HighCPUUsage
+        expr: 100 - (avg by(instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Utilisation CPU élevée"
+          description: "CPU usage est à {{ $value }}% sur {{ $labels.instance }}"
+
+      # Alerte si utilisation mémoire élevée
+      - alert: HighMemoryUsage
+        expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Utilisation mémoire élevée"
+          description: "Mémoire utilisée: {{ $value }}% sur {{ $labels.instance }}"
+
+      # Alerte si espace disque faible
+      - alert: LowDiskSpace
+        expr: (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) * 100 < 15
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Espace disque faible"
+          description: "Il reste {{ $value }}% d'espace disque sur {{ $labels.instance }}"
+
+      # Alerte si Redis est down
+      - alert: RedisDown
+        expr: up{job="redis"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Redis est down"
+          description: "Redis n'est pas accessible"
+
+      # Alerte si PostgreSQL est down
+      - alert: PostgresDown
+        expr: up{job="postgres"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "PostgreSQL est down"
+          description: "PostgreSQL n'est pas accessible"
+
+      # Alerte si taux d'erreur API élevé
+      - alert: HighAPIErrorRate
+        expr: rate(http_requests_total{status=~"5.."}[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Taux d'erreur API élevé"
+          description: "Le taux d'erreur 5xx est de {{ $value }} req/s"
+

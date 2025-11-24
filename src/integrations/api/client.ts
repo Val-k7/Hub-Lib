@@ -8,6 +8,7 @@
 import type { ApiSession, ApiUser, ApiResponse, ApiClientConfig, SessionCallback, RequestOptions } from './types.js';
 import { ApiQueryBuilder } from './queryBuilder.js';
 import { WebSocketService } from './websocket.js';
+import { logger } from '@/lib/logger';
 
 const DEFAULT_CONFIG: ApiClientConfig = {
   baseUrl: import.meta.env.VITE_API_URL || 'http://localhost:3001',
@@ -54,7 +55,7 @@ export class ApiClient {
         }
       }
     } catch (error) {
-      console.error('Erreur lors de l\'initialisation de la session:', error);
+      logger.error('Erreur lors de l\'initialisation de la session', error instanceof Error ? error : new Error(String(error)));
       this.clearSession();
     }
   }
@@ -246,7 +247,7 @@ export class ApiClient {
       try {
         callback(event, session);
       } catch (error) {
-        console.error('Erreur dans le callback de session:', error);
+        logger.error('Erreur dans le callback de session', error instanceof Error ? error : new Error(String(error)));
       }
     });
   }
@@ -428,5 +429,6 @@ export class ApiClient {
 
 // Export singleton
 export const apiClient = new ApiClient();
+
 
 

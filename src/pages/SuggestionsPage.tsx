@@ -36,6 +36,7 @@ import { useNavigate } from "react-router-dom";
 import { VoteButtons } from "@/components/VoteButtons";
 import { unifiedMetadataService } from "@/services/unifiedMetadataService";
 import { seedInitialData } from "@/services/seedData";
+import { logger } from "@/lib/logger";
 
 type SuggestionType = "category" | "tag" | "resource_type" | "filter";
 type SuggestionStatus = "pending" | "approved" | "rejected";
@@ -72,7 +73,9 @@ export default function SuggestionsPage() {
 
   // Initialiser les données au chargement
   useEffect(() => {
-    seedInitialData().catch(console.error);
+    seedInitialData().catch((error) => {
+      logger.error('Erreur lors du seeding initial', undefined, error instanceof Error ? error : new Error(String(error)));
+    });
   }, []);
 
   // Fetch unified items (suggestions + existants) for current tab

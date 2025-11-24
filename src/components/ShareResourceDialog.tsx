@@ -6,7 +6,20 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Share2, Users, User, Globe, Lock, Edit, Trash2, Calendar } from "lucide-react";
 import { useGroups } from "@/hooks/useGroups";
-import { useUpdateResourceVisibility, useShareResource, useResourceShares, useUnshareResource, useUpdateSharePermission, ResourceVisibility, SharePermission } from "@/hooks/useResourceSharing";
+import {
+  useUpdateResourceVisibility,
+  useShareResource,
+  useResourceShares,
+  useUnshareResource,
+  useUpdateSharePermission,
+  ResourceVisibility,
+  SharePermission,
+} from "@/hooks/useResourceSharing";
+import {
+  useResourcePermissions,
+  useCreateResourcePermission,
+  useDeleteResourcePermission,
+} from "@/hooks/useResourcePermissions";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
@@ -28,10 +41,30 @@ export const ShareResourceDialog = ({ resourceId, currentVisibility }: ShareReso
 
   const { data: groups } = useGroups();
   const { data: shares } = useResourceShares(resourceId);
+  const { data: resourcePermissions } = useResourcePermissions(resourceId);
   const updateVisibility = useUpdateResourceVisibility();
   const shareResource = useShareResource();
   const unshareResource = useUnshareResource();
   const updateSharePermission = useUpdateSharePermission();
+  const createResourcePermission = useCreateResourcePermission();
+  const deleteResourcePermission = useDeleteResourcePermission();
+  const [permissionTarget, setPermissionTarget] = useState<"user" | "group">("user");
+  const [permissionUserId, setPermissionUserId] = useState("");
+  const [permissionGroupId, setPermissionGroupId] = useState("");
+  const [customPermission, setCustomPermission] = useState("resource:read");
+  const [permissionExpiresAt, setPermissionExpiresAt] = useState("");
+
+  const canCreateAdvancedPermission =
+    customPermission.trim().length > 0 &&
+    (permissionTarget === "user" ? permissionUserId.trim().length > 0 : permissionGroupId.length > 0);
+
+  const permissionPresets = [
+    { value: "resource:read", label: "Lecture (resource:read)" },
+    { value: "resource:write", label: "Écriture (resource:write)" },
+    { value: "resource:update", label: "Mise à jour (resource:update)" },
+    { value: "resource:delete", label: "Suppression (resource:delete)" },
+    { value: "resource:share", label: "Partage (resource:share)" },
+  ];
 
   const handleVisibilityChange = (newVisibility: ResourceVisibility) => {
     setVisibility(newVisibility);
@@ -52,8 +85,31 @@ export const ShareResourceDialog = ({ resourceId, currentVisibility }: ShareReso
   };
 
   const handleUpdatePermission = (shareId: string, permission: SharePermission, expiresAt?: string | null) => {
-    updateSharePermission.mutate({ shareId, permission, expiresAt });
+    updateSharePermission.mutate({ resourceId, shareId, permission, expiresAt });
     setEditingShareId(null);
+  };
+
+  const handleCreateAdvancedPermission = () => {
+    if (!canCreateAdvancedPermission) return;
+
+    createResourcePermission.mutate(
+      {
+        resourceId,
+        payload: {
+          userId: permissionTarget === "user" ? permissionUserId.trim() : undefined,
+          groupId: permissionTarget === "group" ? permissionGroupId : undefined,
+          permission: customPermission.trim(),
+          expiresAt: permissionExpiresAt || null,
+        },
+      },
+      {
+        onSuccess: () => {
+          setPermissionUserId("");
+          setPermissionGroupId("");
+          setPermissionExpiresAt("");
+        },
+      }
+    );
   };
 
   const isExpired = (expiresAt: string | null) => {
@@ -189,7 +245,7 @@ export const ShareResourceDialog = ({ resourceId, currentVisibility }: ShareReso
                   <ScrollArea className="h-[200px] w-full rounded-md border p-4">
                     <div className="space-y-3">
                       {shares.map((share) => {
-                        const expired = isExpired(share.expires_at);
+                        const expired = isExpired(share.expiresAt);
                         const isEditing = editingShareId === share.id;
                         
                         return (
@@ -202,7 +258,7 @@ export const ShareResourceDialog = ({ resourceId, currentVisibility }: ShareReso
                             <div className="flex items-center justify-between mb-2">
                               <div className="flex items-center gap-2">
                                 <Badge variant={expired ? "destructive" : "secondary"}>
-                                  {share.shared_with_group_id ? "Groupe" : "Utilisateur"}
+                                  {share.sharedWithGroupId ? "Groupe" : "Utilisateur"}
                                 </Badge>
                                 <Badge variant="outline">
                                   {share.permission === "read" ? "Lecture seule" : "Lecture-écriture"}
@@ -220,18 +276,18 @@ export const ShareResourceDialog = ({ resourceId, currentVisibility }: ShareReso
                                 <Button
                                   variant="ghost"
                                   size="sm"
-                                  onClick={() => unshareResource.mutate(share.id)}
+                                  onClick={() => unshareResource.mutate({ resourceId, shareId: share.id })}
                                 >
                                   <Trash2 className="h-3 w-3" />
                                 </Button>
                               </div>
                             </div>
                             
-                            {share.expires_at && (
+                            {share.expiresAt && (
                               <div className="flex items-center gap-1 text-xs text-muted-foreground mb-2">
                                 <Calendar className="h-3 w-3" />
                                 <span>
-                                  Expire le {format(new Date(share.expires_at), "PPp", { locale: fr })}
+                                  Expire le {format(new Date(share.expiresAt), "PPp", { locale: fr })}
                                 </span>
                               </div>
                             )}
@@ -241,7 +297,7 @@ export const ShareResourceDialog = ({ resourceId, currentVisibility }: ShareReso
                                 <Select
                                   value={share.permission}
                                   onValueChange={(v) =>
-                                    handleUpdatePermission(share.id, v as SharePermission, share.expires_at)
+                                    handleUpdatePermission(share.id, v as SharePermission, share.expiresAt)
                                   }
                                 >
                                   <SelectTrigger className="h-8">
@@ -254,7 +310,7 @@ export const ShareResourceDialog = ({ resourceId, currentVisibility }: ShareReso
                                 </Select>
                                 <Input
                                   type="datetime-local"
-                                  value={share.expires_at ? format(new Date(share.expires_at), "yyyy-MM-dd'T'HH:mm") : ""}
+                                  value={share.expiresAt ? format(new Date(share.expiresAt), "yyyy-MM-dd'T'HH:mm") : ""}
                                   onChange={(e) =>
                                     handleUpdatePermission(
                                       share.id,
@@ -275,6 +331,137 @@ export const ShareResourceDialog = ({ resourceId, currentVisibility }: ShareReso
               )}
             </>
           )}
+
+          <Separator />
+          <div className="space-y-4">
+            <div>
+              <Label>Permissions avancées</Label>
+              <p className="text-sm text-muted-foreground">
+                Accordez un droit précis (lecture, modification, suppression) à un utilisateur ou à un groupe, même si la
+                ressource n&apos;est pas partagée globalement.
+              </p>
+            </div>
+            <div className="space-y-3">
+              <div className="grid gap-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label>Cible</Label>
+                    <Select value={permissionTarget} onValueChange={(v) => setPermissionTarget(v as "user" | "group")}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Choisir la cible" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="user">Utilisateur</SelectItem>
+                        <SelectItem value="group">Groupe</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Expiration (optionnel)</Label>
+                    <Input
+                      type="datetime-local"
+                      value={permissionExpiresAt}
+                      onChange={(e) => setPermissionExpiresAt(e.target.value)}
+                    />
+                  </div>
+                </div>
+                {permissionTarget === "user" ? (
+                  <div className="space-y-1.5">
+                    <Label>ID utilisateur</Label>
+                    <Input
+                      placeholder="UUID de l'utilisateur"
+                      value={permissionUserId}
+                      onChange={(e) => setPermissionUserId(e.target.value)}
+                    />
+                  </div>
+                ) : (
+                  <div className="space-y-1.5">
+                    <Label>Groupe</Label>
+                    <Select value={permissionGroupId} onValueChange={setPermissionGroupId}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Sélectionner un groupe" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {groups?.map((group) => (
+                          <SelectItem key={group.id} value={group.id}>
+                            {group.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+                <div className="grid gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    {permissionPresets.map((preset) => (
+                      <Button
+                        key={preset.value}
+                        type="button"
+                        variant={customPermission === preset.value ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setCustomPermission(preset.value)}
+                      >
+                        {preset.label}
+                      </Button>
+                    ))}
+                  </div>
+                  <Input
+                    placeholder="resource:action (ex: resource:read)"
+                    value={customPermission}
+                    onChange={(e) => setCustomPermission(e.target.value)}
+                  />
+                </div>
+                <Button
+                  type="button"
+                  onClick={handleCreateAdvancedPermission}
+                  disabled={!canCreateAdvancedPermission || createResourcePermission.isPending}
+                >
+                  {createResourcePermission.isPending ? "Ajout..." : "Ajouter la permission"}
+                </Button>
+              </div>
+              {resourcePermissions && resourcePermissions.length > 0 ? (
+                <ScrollArea className="h-[180px] w-full rounded-md border p-4">
+                  <div className="space-y-3">
+                    {resourcePermissions.map((permission) => (
+                      <div
+                        key={permission.id}
+                        className="rounded-lg border p-3 flex items-center justify-between gap-3"
+                      >
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            <Badge variant="secondary">
+                              {permission.user
+                                ? permission.user.username || permission.user.fullName || permission.user.email
+                                : permission.group
+                                  ? permission.group.name
+                                  : "Permission"}
+                            </Badge>
+                            <Badge variant="outline">{permission.permission}</Badge>
+                          </div>
+                          {permission.expiresAt && (
+                            <p className="text-xs text-muted-foreground">
+                              Expire le {format(new Date(permission.expiresAt), "PPp", { locale: fr })}
+                            </p>
+                          )}
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() =>
+                            deleteResourcePermission.mutate({ resourceId, permissionId: permission.id })
+                          }
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                </ScrollArea>
+              ) : (
+                <p className="text-sm text-muted-foreground">Aucune permission avancée n&apos;a été définie.</p>
+              )}
+            </div>
+          </div>
         </div>
       </DialogContent>
     </Dialog>

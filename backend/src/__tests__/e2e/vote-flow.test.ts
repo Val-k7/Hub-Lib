@@ -130,3 +130,4 @@ describe('Flux de vote E2E', () => {
   });
 });
 
+

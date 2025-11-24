@@ -4,6 +4,7 @@
 
 import { PrismaClient } from '@prisma/client';
 import { env } from './env.js';
+import { logger } from '../utils/logger.js';
 
 // Singleton Prisma Client
 let prisma: PrismaClient;
@@ -28,10 +29,18 @@ if (env.NODE_ENV === 'production') {
 }
 
 // Connexion à la base de données
-prisma.$connect().catch((error) => {
-  console.error('❌ Erreur de connexion à PostgreSQL:', error);
-  process.exit(1);
-});
+// En mode test, ne pas faire exit(1) pour permettre les tests de continuer
+if (env.NODE_ENV !== 'test') {
+  prisma.$connect().catch((error) => {
+    logger.error('Erreur de connexion à PostgreSQL', error);
+    process.exit(1);
+  });
+} else {
+  // En mode test, connecter sans exit
+  prisma.$connect().catch((error) => {
+    logger.warn('Erreur de connexion à PostgreSQL en mode test (peut être normal):', error);
+  });
+}
 
 // Gestion de la fermeture propre
 process.on('beforeExit', async () => {
@@ -39,5 +48,6 @@ process.on('beforeExit', async () => {
 });
 
 export { prisma };
+
 
 

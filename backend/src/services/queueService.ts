@@ -187,7 +187,7 @@ class QueueService {
     const suggestion = await prisma.categoryTagSuggestion.findUnique({
       where: { id: suggestionId },
       include: {
-        votes: true,
+        suggestionVotes: true,
       },
     });
 
@@ -201,8 +201,9 @@ class QueueService {
     }
 
     // Compter les votes positifs
-    const positiveVotes = suggestion.votes.filter((v) => v.voteType === 'upvote').length;
-    const negativeVotes = suggestion.votes.filter((v) => v.voteType === 'downvote').length;
+    const votes = suggestion.suggestionVotes || [];
+    const positiveVotes = votes.filter((v) => v.voteType === 'upvote').length;
+    const negativeVotes = votes.filter((v) => v.voteType === 'downvote').length;
 
     // Si le seuil est atteint, approuver automatiquement
     if (positiveVotes >= threshold && positiveVotes > negativeVotes) {
@@ -214,9 +215,9 @@ class QueueService {
       logger.info(`Suggestion ${suggestionId} approuvée automatiquement (${positiveVotes} votes)`);
 
       // Notifier l'auteur de la suggestion
-      if (suggestion.userId) {
+      if (suggestion.suggestedBy) {
         await notificationService.createNotification({
-          userId: suggestion.userId,
+          userId: suggestion.suggestedBy,
           type: 'suggestion_approved',
           title: 'Suggestion approuvée',
           message: `Votre suggestion "${suggestion.name}" a été approuvée automatiquement`,
@@ -269,23 +270,81 @@ class QueueService {
       await redis.expire(userKey, 30 * 24 * 3600); // Expire après 30 jours
     }
 
-    // TODO: En production, on pourrait aussi stocker dans PostgreSQL pour l'historique long terme
+    // Stocker dans PostgreSQL pour l'historique long terme
+    try {
+      await prisma.analyticsEvent.create({
+        data: {
+          event,
+          userId: userId || null,
+          resourceId: resourceId || null,
+          metadata: metadata ? (metadata as object) : null,
+        },
+      });
+    } catch (error) {
+      // Ne pas bloquer le traitement si l'insertion en base échoue
+      logger.warn(`Échec du stockage analytics en PostgreSQL pour ${event}:`, error);
+    }
   }
 
   /**
-   * Traite une tâche d'email (placeholder pour le futur)
+   * Traite une tâche d'email
    */
   private async processEmail(job: Job<EmailJobData>): Promise<void> {
     const { to, subject, template, data } = job.data;
 
-    // TODO: Implémenter l'envoi d'emails
-    logger.info(`Email à envoyer à ${to}: ${subject}`, { template, data });
+    try {
+      const { emailService, EmailTemplate } = await import('./emailService.js');
+      
+      // Convertir le template string en enum
+      let emailTemplate: typeof EmailTemplate[keyof typeof EmailTemplate];
+      switch (template) {
+        case 'welcome':
+          emailTemplate = EmailTemplate.WELCOME;
+          break;
+        case 'password_reset':
+          emailTemplate = EmailTemplate.PASSWORD_RESET;
+          break;
+        case 'notification':
+          emailTemplate = EmailTemplate.NOTIFICATION;
+          break;
+        case 'resource_shared':
+          emailTemplate = EmailTemplate.RESOURCE_SHARED;
+          break;
+        case 'resource_comment':
+          emailTemplate = EmailTemplate.RESOURCE_COMMENT;
+          break;
+        case 'suggestion_approved':
+          emailTemplate = EmailTemplate.SUGGESTION_APPROVED;
+          break;
+        case 'suggestion_rejected':
+          emailTemplate = EmailTemplate.SUGGESTION_REJECTED;
+          break;
+        default:
+          emailTemplate = EmailTemplate.NOTIFICATION;
+      }
+
+      const success = await emailService.sendEmail({
+        to,
+        subject,
+        template: emailTemplate,
+        data: data || {},
+      });
+
+      if (!success) {
+        throw new Error('Échec de l\'envoi de l\'email');
+      }
+
+      logger.info(`✅ Email envoyé avec succès à ${to}: ${subject}`);
+    } catch (error) {
+      logger.error(`❌ Erreur lors de l'envoi d'email à ${to}:`, error);
+      throw error; // Relancer pour que BullMQ puisse retry
+    }
   }
 
   /**
    * Traite une tâche de nettoyage
    */
-  private async processCleanup(job: Job): Promise<void> {
+  private async processCleanup(_job: Job): Promise<void> {
     logger.info('Démarrage du nettoyage périodique');
 
     // Nettoyer les sessions expirées

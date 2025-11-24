@@ -3,6 +3,7 @@
  */
 
 import { client } from '@/integrations/client';
+import { logger } from '@/lib/logger';
 
 export interface AdminConfig {
   id: string;
@@ -237,7 +238,7 @@ class AdminConfigService {
       .execute();
     
     if (error) {
-      console.error('Erreur lors de la récupération de la config:', error);
+      logger.error('Erreur lors de la récupération de la config', error instanceof Error ? error : new Error(String(error)));
       return [];
     }
     
@@ -253,7 +254,7 @@ class AdminConfigService {
         .execute();
       
       if (error) {
-        console.error('Erreur lors de la sauvegarde de la config:', error);
+        logger.error('Erreur lors de la sauvegarde de la config', error instanceof Error ? error : new Error(String(error)));
       }
     }
   }

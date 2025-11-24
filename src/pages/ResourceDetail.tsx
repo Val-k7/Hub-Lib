@@ -25,6 +25,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { useNavigate } from "react-router-dom";
 import { ShareResourceDialog } from "@/components/ShareResourceDialog";
+import { ShareToGitHub } from "@/components/ShareToGitHub";
+import { ShareToGoogleDrive } from "@/components/ShareToGoogleDrive";
 import {
   Star,
   GitFork,
@@ -291,20 +293,26 @@ const ResourceDetail = () => {
                 </Card>
 
                 {/* Actions */}
-                <div className="flex gap-3">
+                <div className="flex gap-3 flex-wrap">
                   {resource.github_url && (
                     <Button
                       variant="outline"
-                      className="flex-1 gap-2"
+                      className="flex-1 gap-2 min-w-[150px]"
                       onClick={() => window.open(resource.github_url!, "_blank")}
                     >
                       <Github className="h-4 w-4" />
                       Voir sur GitHub
                     </Button>
                   )}
+                  {user && user.id === resource.user_id && (
+                    <>
+                      <ShareToGitHub resourceId={resource.id} resourceTitle={resource.title} />
+                      <ShareToGoogleDrive resourceId={resource.id} resourceTitle={resource.title} />
+                    </>
+                  )}
                   <Button
                     variant="outline"
-                    className="flex-1 gap-2"
+                    className="flex-1 gap-2 min-w-[150px]"
                     onClick={() => {
                       navigator.clipboard.writeText(window.location.href);
                     }}

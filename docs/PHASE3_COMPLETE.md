@@ -311,3 +311,4 @@ cache:tag:{tag} (Set de clés)
 **Tous les services Redis sont implémentés et fonctionnels !**
 
 
+

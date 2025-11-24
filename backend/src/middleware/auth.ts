@@ -4,23 +4,12 @@
 
 import { Request, Response, NextFunction } from 'express';
 import { authService } from '../services/authService.js';
+import { permissionService } from '../services/permissionService.js';
 import { logger } from '../utils/logger.js';
-
-// Étendre l'interface Request pour inclure user
-declare global {
-  namespace Express {
-    interface Request {
-      user?: {
-        userId: string;
-        email: string;
-        role?: string;
-      };
-    }
-  }
-}
+// Les types Request étendus sont définis dans src/types/express.d.ts
 
 /**
- * Middleware d'authentification - vérifie le token JWT
+ * Middleware d'authentification - vérifie le token JWT ou API token
  */
 export const authMiddleware = async (
   req: Request,
@@ -49,7 +38,59 @@ export const authMiddleware = async (
       return;
     }
 
-    // Vérifier et décoder le token
+    // Vérifier si c'est un token API (commence par "hub_lib_")
+    if (token.startsWith('hub_lib_')) {
+      const { prisma } = await import('../config/database.js');
+      
+      // Chercher le token API dans la base de données
+      const apiToken = await prisma.apiToken.findUnique({
+        where: { token },
+        include: {
+          user: {
+            include: {
+              userRole: true,
+            },
+          },
+        },
+      });
+
+      if (!apiToken) {
+        res.status(401).json({
+          error: 'Token API invalide',
+          code: 'API_TOKEN_INVALID',
+        });
+        return;
+      }
+
+      // Vérifier l'expiration
+      if (apiToken.expiresAt && new Date(apiToken.expiresAt) < new Date()) {
+        res.status(401).json({
+          error: 'Token API expiré',
+          code: 'API_TOKEN_EXPIRED',
+        });
+        return;
+      }
+
+      // Mettre à jour lastUsedAt
+      await prisma.apiToken.update({
+        where: { id: apiToken.id },
+        data: { lastUsedAt: new Date() },
+      }).catch(() => {
+        // Ignorer les erreurs de mise à jour
+      });
+
+      // Ajouter l'utilisateur à la requête
+      req.user = {
+        userId: apiToken.user.userId,
+        email: apiToken.user.email,
+        role: apiToken.user.userRole?.role || 'user',
+      };
+
+      next();
+      return;
+    }
+
+    // Sinon, vérifier comme un token JWT
     const payload = authService.verifyAccessToken(token);
 
     // Récupérer les informations complètes de l'utilisateur
@@ -71,10 +112,11 @@ export const authMiddleware = async (
     };
 
     next();
-  } catch (error: any) {
-    logger.warn(`Erreur d'authentification: ${error.message}`);
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : 'Token d\'authentification invalide';
+    logger.warn(`Erreur d'authentification: ${errorMessage}`);
     res.status(401).json({
-      error: error.message || 'Token d\'authentification invalide',
+      error: errorMessage,
       code: 'AUTH_TOKEN_INVALID',
     });
   }
@@ -86,7 +128,7 @@ export const authMiddleware = async (
  */
 export const optionalAuthMiddleware = async (
   req: Request,
-  res: Response,
+  _res: Response,
   next: NextFunction
 ): Promise<void> => {
   try {
@@ -121,8 +163,9 @@ export const optionalAuthMiddleware = async (
 
 /**
  * Middleware pour vérifier que l'utilisateur a un rôle spécifique
+ * Utilise maintenant le nouveau système de permissions
  */
-export const requireRole = (role: 'admin' | 'user') => {
+export const requireRole = (role: 'super_admin' | 'admin' | 'moderator' | 'user' | 'guest') => {
   return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     if (!req.user) {
       res.status(401).json({
@@ -132,7 +175,7 @@ export const requireRole = (role: 'admin' | 'user') => {
       return;
     }
 
-    const hasRole = await authService.hasRole(req.user.userId, role);
+    const hasRole = await permissionService.hasRole(req.user.userId, role);
 
     if (!hasRole) {
       res.status(403).json({
@@ -177,5 +220,6 @@ export const requireOwnership = (userIdParam: string = 'userId') => {
     next();
   };
 };
+
 
 

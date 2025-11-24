@@ -102,3 +102,4 @@ describe('POST /api/suggestions/:id/vote', () => {
   });
 });
 
+

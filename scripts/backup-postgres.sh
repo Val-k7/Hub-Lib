@@ -43,3 +43,4 @@ echo "📦 Taille: $BACKUP_SIZE"
 
 echo "✅ Backup PostgreSQL terminé avec succès !"
 
+

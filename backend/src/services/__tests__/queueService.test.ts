@@ -156,8 +156,19 @@ describe('queueService', () => {
       vi.mocked(prisma.categoryTagSuggestion.findUnique).mockResolvedValue({
         id: suggestionId,
         status: 'pending',
+        suggestionVotes: [
+          { voteType: 'upvote' },
+          { voteType: 'upvote' },
+          { voteType: 'upvote' },
+          { voteType: 'upvote' },
+          { voteType: 'upvote' },
+          { voteType: 'upvote' },
+          { voteType: 'upvote' },
+          { voteType: 'upvote' },
+          { voteType: 'upvote' },
+          { voteType: 'upvote' },
+        ],
       } as any);
-      vi.mocked(prisma.suggestionVote.count).mockResolvedValue(15);
       vi.mocked(prisma.categoryTagSuggestion.update).mockResolvedValue({
         id: suggestionId,
         status: 'approved',

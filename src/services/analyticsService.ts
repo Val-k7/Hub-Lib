@@ -3,6 +3,8 @@
  * Utilise le backend API avec fallback localStorage pour le mode offline
  */
 
+import { logger } from '@/lib/logger';
+
 interface AnalyticsEvent {
   id: string;
   type: string;
@@ -66,7 +68,7 @@ class AnalyticsService {
         return;
       } catch (error) {
         // En cas d'erreur, sauvegarder en localStorage pour retry plus tard
-        console.warn('Erreur lors de l\'envoi de l\'événement analytics, sauvegarde locale:', error);
+        logger.warn('Erreur lors de l\'envoi de l\'événement analytics, sauvegarde locale', undefined, error instanceof Error ? error : new Error(String(error)));
         const events = this.getEvents();
         events.push(event);
         if (events.length > this.MAX_EVENTS) {
@@ -153,7 +155,7 @@ class AnalyticsService {
           const backendStats = await response.json();
           
           // Convertir le format backend en format frontend
-          const recentEvents: AnalyticsEvent[] = backendStats.recentEvents?.map((e: any) => ({
+          const recentEvents: AnalyticsEvent[] = backendStats.recentEvents?.map((e: { event: string; date: string }) => ({
             id: `event_${Date.now()}_${Math.random()}`,
             type: e.event,
             metadata: {},
@@ -168,7 +170,7 @@ class AnalyticsService {
           };
         }
       } catch (error) {
-        console.warn('Erreur lors de la récupération des stats depuis le backend, fallback localStorage:', error);
+        logger.warn('Erreur lors de la récupération des stats depuis le backend, fallback localStorage', undefined, error instanceof Error ? error : new Error(String(error)));
       }
     }
 
@@ -203,7 +205,7 @@ class AnalyticsService {
           return await response.json();
         }
       } catch (error) {
-        console.warn('Erreur lors de la récupération des ressources populaires depuis le backend, fallback localStorage:', error);
+        logger.warn('Erreur lors de la récupération des ressources populaires depuis le backend, fallback localStorage', undefined, error instanceof Error ? error : new Error(String(error)));
       }
     }
 
@@ -236,7 +238,7 @@ class AnalyticsService {
           return await response.json();
         }
       } catch (error) {
-        console.warn('Erreur lors de la récupération des tendances depuis le backend, fallback localStorage:', error);
+        logger.warn('Erreur lors de la récupération des tendances depuis le backend, fallback localStorage', undefined, error instanceof Error ? error : new Error(String(error)));
       }
     }
 

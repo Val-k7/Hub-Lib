@@ -39,10 +39,10 @@ export function useCreateApiToken() {
         description: `Token "${token.name}" créé avec succès. Copiez-le maintenant, il ne sera plus affiché !`,
       });
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       toast({
         title: 'Erreur',
-        description: error.message || 'Impossible de créer le token',
+        description: getErrorMessage(error) || 'Impossible de créer le token',
         variant: 'destructive',
       });
     },
@@ -69,7 +69,7 @@ export function useDeleteApiToken() {
         description: 'Le token a été supprimé avec succès',
       });
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       toast({
         title: 'Erreur',
         description: error.message || 'Impossible de supprimer le token',

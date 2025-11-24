@@ -2,7 +2,7 @@
  * Service de gestion des templates de ressources
  */
 
-import { client } from.*client';
+import { client } from '@/integrations/client';
 import type { Resource } from '@/types/resource';
 
 export interface ResourceTemplate {

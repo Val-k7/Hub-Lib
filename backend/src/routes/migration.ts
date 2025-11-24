@@ -3,7 +3,7 @@
  * Permet d'importer les données depuis localStorage vers PostgreSQL
  */
 
-import { Router } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
 import { prisma } from '../config/database.js';
 import { logger } from '../utils/logger.js';
 import { authMiddleware, requireRole } from '../middleware/auth.js';
@@ -191,7 +191,7 @@ function cleanTableData(tableName: string, data: any[]): any[] {
  * POST /api/migration/import
  * Importe les données depuis un export localStorage
  */
-router.post('/import', async (req, res, next) => {
+router.post('/import', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const importData = ImportSchema.parse(req.body);
     const results = {
@@ -329,7 +329,7 @@ router.post('/import', async (req, res, next) => {
  * GET /api/migration/validate
  * Valide les données avant import (dry-run)
  */
-router.post('/validate', async (req, res, next) => {
+router.post('/validate', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const importData = ImportSchema.parse(req.body);
     const validation = {

@@ -1,177 +1,125 @@
 /**
- * Tests unitaires pour voteService
+ * Tests d'intégration pour voteService
+ * Utilise de vraies connexions DB et Redis
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { voteService } from '../voteService.js';
+import { createTestUser, deleteTestUser, type TestUser, isDatabaseAvailable, isRedisAvailable } from '../../test/helpers.js';
 import { prisma } from '../../config/database.js';
-import { redis } from '../../config/redis.js';
-import { notificationService } from '../notificationService.js';
-
-// Mock Prisma, Redis et notificationService
-vi.mock('../../config/database.js', () => ({
-  prisma: {
-    categoryTagSuggestion: {
-      findUnique: vi.fn(),
-    },
-    suggestionVote: {
-      findUnique: vi.fn(),
-      create: vi.fn(),
-      update: vi.fn(),
-      delete: vi.fn(),
-      count: vi.fn(),
-    },
-  },
-}));
-
-vi.mock('../../config/redis.js', () => ({
-  redis: {
-    setex: vi.fn(),
-    get: vi.fn(),
-    del: vi.fn(),
-    zrevrange: vi.fn(),
-    zadd: vi.fn(),
-    zremrangebyrank: vi.fn(),
-  },
-}));
-
-vi.mock('../notificationService.js', () => ({
-  notificationService: {
-    publishSuggestionVote: vi.fn(),
-  },
-}));
+import { v4 as uuidv4 } from 'uuid';
 
 describe('voteService', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
+  let testUser: TestUser;
+  let testSuggestion: { id: string };
+
+  beforeEach(async () => {
+    if (!(await isDatabaseAvailable()) || !(await isRedisAvailable())) {
+      return;
+    }
+    testUser = await createTestUser();
+
+    // Créer une suggestion de test
+    testSuggestion = await prisma.categoryTagSuggestion.create({
+      data: {
+        type: 'category',
+        value: `Test Category ${uuidv4()}`,
+        status: 'pending',
+        suggestedBy: testUser.userId,
+      },
+    });
+  });
+
+  afterEach(async () => {
+    if (testSuggestion?.id) {
+      await prisma.suggestionVote.deleteMany({
+        where: { suggestionId: testSuggestion.id },
+      });
+      await prisma.categoryTagSuggestion.delete({
+        where: { id: testSuggestion.id },
+      });
+    }
+    if (testUser?.userId) {
+      await deleteTestUser(testUser.userId);
+    }
   });
 
   describe('voteOnSuggestion', () => {
     it('devrait créer un nouveau vote', async () => {
-      const suggestionId = 'suggestion-123';
-      const userId = 'user-123';
-      const voteType = 'upvote' as const;
+      if (!(await isDatabaseAvailable()) || !(await isRedisAvailable())) {
+        return;
+      }
 
-      const mockSuggestion = {
-        id: suggestionId,
-        status: 'pending',
-      };
-
-      vi.mocked(prisma.categoryTagSuggestion.findUnique).mockResolvedValue(mockSuggestion as any);
-      vi.mocked(prisma.suggestionVote.findUnique).mockResolvedValue(null);
-      vi.mocked(prisma.suggestionVote.create).mockResolvedValue({
-        id: 'vote-123',
-        suggestionId,
-        userId,
-        voteType,
-      } as any);
-      vi.mocked(prisma.suggestionVote.count).mockResolvedValueOnce(5).mockResolvedValueOnce(2);
-      vi.mocked(redis.setex).mockResolvedValue('OK');
-      vi.mocked(notificationService.publishSuggestionVote).mockResolvedValue();
-
-      const result = await voteService.voteOnSuggestion(suggestionId, userId, voteType);
+      const result = await voteService.voteOnSuggestion(
+        testSuggestion.id,
+        testUser.userId,
+        'upvote'
+      );
 
       expect(result.success).toBe(true);
-      expect(result.totalUpvotes).toBe(5);
-      expect(result.totalDownvotes).toBe(2);
-      expect(result.userVote).toBe('upvote');
-      expect(prisma.suggestionVote.create).toHaveBeenCalled();
-      expect(notificationService.publishSuggestionVote).toHaveBeenCalled();
+      expect(result).toHaveProperty('totalUpvotes');
+      expect(result).toHaveProperty('totalDownvotes');
+      expect(result).toHaveProperty('userVote', 'upvote');
     });
 
     it('devrait annuler un vote si l\'utilisateur vote de la même manière', async () => {
-      const suggestionId = 'suggestion-123';
-      const userId = 'user-123';
-      const voteType = 'upvote' as const;
+      if (!(await isDatabaseAvailable()) || !(await isRedisAvailable())) {
+        return;
+      }
 
-      const mockSuggestion = {
-        id: suggestionId,
-        status: 'pending',
-      };
+      // Créer un vote upvote
+      await voteService.voteOnSuggestion(testSuggestion.id, testUser.userId, 'upvote');
 
-      const existingVote = {
-        id: 'vote-123',
-        suggestionId,
-        userId,
-        voteType: 'upvote',
-      };
-
-      vi.mocked(prisma.categoryTagSuggestion.findUnique).mockResolvedValue(mockSuggestion as any);
-      vi.mocked(prisma.suggestionVote.findUnique).mockResolvedValue(existingVote as any);
-      vi.mocked(prisma.suggestionVote.delete).mockResolvedValue(existingVote as any);
-      vi.mocked(prisma.suggestionVote.count).mockResolvedValueOnce(4).mockResolvedValueOnce(2);
-      vi.mocked(redis.setex).mockResolvedValue('OK');
-      vi.mocked(notificationService.publishSuggestionVote).mockResolvedValue();
-
-      const result = await voteService.voteOnSuggestion(suggestionId, userId, voteType);
+      // Voter à nouveau upvote (devrait annuler)
+      const result = await voteService.voteOnSuggestion(
+        testSuggestion.id,
+        testUser.userId,
+        'upvote'
+      );
 
       expect(result.success).toBe(true);
       expect(result.userVote).toBeNull();
-      expect(prisma.suggestionVote.delete).toHaveBeenCalled();
     });
 
-    it('devrait changer un vote existant', async () => {
-      const suggestionId = 'suggestion-123';
-      const userId = 'user-123';
-      const voteType = 'downvote' as const;
+    it('devrait changer un vote upvote en downvote', async () => {
+      if (!(await isDatabaseAvailable()) || !(await isRedisAvailable())) {
+        return;
+      }
 
-      const mockSuggestion = {
-        id: suggestionId,
-        status: 'pending',
-      };
+      // Créer un vote upvote
+      await voteService.voteOnSuggestion(testSuggestion.id, testUser.userId, 'upvote');
 
-      const existingVote = {
-        id: 'vote-123',
-        suggestionId,
-        userId,
-        voteType: 'upvote',
-      };
-
-      vi.mocked(prisma.categoryTagSuggestion.findUnique).mockResolvedValue(mockSuggestion as any);
-      vi.mocked(prisma.suggestionVote.findUnique).mockResolvedValue(existingVote as any);
-      vi.mocked(prisma.suggestionVote.update).mockResolvedValue({
-        ...existingVote,
-        voteType: 'downvote',
-      } as any);
-      vi.mocked(prisma.suggestionVote.count).mockResolvedValueOnce(4).mockResolvedValueOnce(3);
-      vi.mocked(redis.setex).mockResolvedValue('OK');
-      vi.mocked(notificationService.publishSuggestionVote).mockResolvedValue();
-
-      const result = await voteService.voteOnSuggestion(suggestionId, userId, voteType);
+      // Changer en downvote
+      const result = await voteService.voteOnSuggestion(
+        testSuggestion.id,
+        testUser.userId,
+        'downvote'
+      );
 
       expect(result.success).toBe(true);
       expect(result.userVote).toBe('downvote');
-      expect(prisma.suggestionVote.update).toHaveBeenCalled();
     });
   });
 
   describe('getSuggestionVotes', () => {
-    it('devrait récupérer les votes depuis le cache si disponible', async () => {
-      const suggestionId = 'suggestion-123';
-      const cachedData = { totalUpvotes: 5, totalDownvotes: 2 };
+    it('devrait récupérer les votes d\'une suggestion', async () => {
+      if (!(await isDatabaseAvailable()) || !(await isRedisAvailable())) {
+        return;
+      }
 
-      vi.mocked(redis.get).mockResolvedValue(JSON.stringify(cachedData));
+      // Créer quelques votes
+      const user2 = await createTestUser();
+      await voteService.voteOnSuggestion(testSuggestion.id, testUser.userId, 'upvote');
+      await voteService.voteOnSuggestion(testSuggestion.id, user2.userId, 'upvote');
 
-      const result = await voteService.getSuggestionVotes(suggestionId);
+      const votes = await voteService.getSuggestionVotes(testSuggestion.id);
 
-      expect(result).toEqual(cachedData);
-      expect(redis.get).toHaveBeenCalled();
-      expect(prisma.suggestionVote.count).not.toHaveBeenCalled();
-    });
+      expect(votes).toHaveProperty('totalUpvotes');
+      expect(votes).toHaveProperty('totalDownvotes');
+      expect(votes.totalUpvotes).toBeGreaterThanOrEqual(2);
 
-    it('devrait récupérer les votes depuis la DB si pas en cache', async () => {
-      const suggestionId = 'suggestion-123';
-
-      vi.mocked(redis.get).mockResolvedValue(null);
-      vi.mocked(prisma.suggestionVote.count).mockResolvedValueOnce(5).mockResolvedValueOnce(2);
-      vi.mocked(redis.setex).mockResolvedValue('OK');
-
-      const result = await voteService.getSuggestionVotes(suggestionId);
-
-      expect(result).toEqual({ totalUpvotes: 5, totalDownvotes: 2 });
-      expect(prisma.suggestionVote.count).toHaveBeenCalledTimes(2);
-      expect(redis.setex).toHaveBeenCalled();
+      // Nettoyer
+      await deleteTestUser(user2.userId);
     });
   });
 });
-

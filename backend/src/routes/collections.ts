@@ -3,6 +3,7 @@
  */
 
 import express from 'express';
+import { Request, Response } from 'express';
 import { z } from 'zod';
 import { prisma } from '../config/database.js';
 import { authMiddleware, optionalAuthMiddleware } from '../middleware/auth.js';
@@ -30,7 +31,7 @@ router.get(
   '/',
   optionalAuthMiddleware,
   generalRateLimit,
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: Request, res: Response) => {
     const userId = req.query.userId as string | undefined;
     const includePrivate = req.user?.userId === userId;
     const limit = parseInt(req.query.limit as string) || 20;
@@ -99,7 +100,7 @@ router.get(
   '/:id',
   optionalAuthMiddleware,
   generalRateLimit,
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: Request, res: Response) => {
     const { id } = req.params;
 
     const collection = await prisma.collection.findUnique({
@@ -156,7 +157,7 @@ router.post(
   '/',
   authMiddleware,
   generalRateLimit,
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: Request, res: Response) => {
     if (!req.user) {
       throw new AppError('Authentification requise', 401, 'AUTH_REQUIRED');
     }
@@ -196,7 +197,7 @@ router.put(
   '/:id',
   authMiddleware,
   generalRateLimit,
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: Request, res: Response) => {
     if (!req.user) {
       throw new AppError('Authentification requise', 401, 'AUTH_REQUIRED');
     }
@@ -247,7 +248,7 @@ router.delete(
   '/:id',
   authMiddleware,
   generalRateLimit,
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: Request, res: Response) => {
     if (!req.user) {
       throw new AppError('Authentification requise', 401, 'AUTH_REQUIRED');
     }
@@ -283,7 +284,7 @@ router.post(
   '/:id/resources',
   authMiddleware,
   generalRateLimit,
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: Request, res: Response) => {
     if (!req.user) {
       throw new AppError('Authentification requise', 401, 'AUTH_REQUIRED');
     }
@@ -380,7 +381,7 @@ router.delete(
   '/:id/resources/:resourceId',
   authMiddleware,
   generalRateLimit,
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: Request, res: Response) => {
     if (!req.user) {
       throw new AppError('Authentification requise', 401, 'AUTH_REQUIRED');
     }

@@ -62,3 +62,4 @@ echo "📦 Taille: $BACKUP_SIZE"
 
 echo "✅ Backup Redis terminé avec succès !"
 
+

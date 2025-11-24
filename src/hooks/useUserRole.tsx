@@ -1,44 +1,22 @@
-import { useEffect, useState } from "react";
-import { localClient } from "@/integrations/local/client";
-import { useAuth } from "./useAuth";
+/**
+ * Hook pour vérifier le rôle de l'utilisateur
+ * 
+ * Utilise maintenant le système de permissions avec cache
+ * @deprecated Utilisez usePermissions() ou useIsAdmin() à la place
+ */
+import { usePermissions } from "./usePermissions";
+import type { AppRole } from "@/types/permissions";
 
 export const useUserRole = () => {
-  const { user } = useAuth();
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const { userRole, hasRole, loading } = usePermissions();
 
-  useEffect(() => {
-    const checkUserRole = async () => {
-      if (!user) {
-        setIsAdmin(false);
-        setLoading(false);
-        return;
-      }
+  // Rétrocompatibilité : retourner isAdmin
+  const isAdmin = hasRole('admin');
 
-      try {
-        const { data, error } = await localClient
-          .from("user_roles")
-          .select("role")
-          .eq("user_id", user.id)
-          .eq("role", "admin")
-          .maybeSingle();
-
-        if (error) {
-          console.error("Error checking user role:", error);
-          setIsAdmin(false);
-        } else {
-          setIsAdmin(!!data);
-        }
-      } catch (error) {
-        console.error("Error checking user role:", error);
-        setIsAdmin(false);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    checkUserRole();
-  }, [user]);
-
-  return { isAdmin, loading };
+  return { 
+    isAdmin, 
+    loading,
+    role: userRole,
+    hasRole: (role: AppRole) => hasRole(role),
+  };
 };

@@ -3,6 +3,7 @@
  */
 
 import express from 'express';
+import { Request, Response } from 'express';
 import { z } from 'zod';
 import { prisma } from '../config/database.js';
 import { authMiddleware, optionalAuthMiddleware } from '../middleware/auth.js';
@@ -30,7 +31,7 @@ router.get(
   '/:id',
   optionalAuthMiddleware,
   generalRateLimit,
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: Request, res: Response) => {
     const { id } = req.params;
 
     // Récupérer depuis le cache
@@ -84,7 +85,7 @@ router.get(
   '/:id/resources',
   optionalAuthMiddleware,
   generalRateLimit,
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: Request, res: Response) => {
     const { id } = req.params;
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 20;
@@ -141,7 +142,7 @@ router.get(
   '/:id/stats',
   optionalAuthMiddleware,
   generalRateLimit,
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: Request, res: Response) => {
     const { id } = req.params;
 
     // Vérifier que le profil existe
@@ -247,7 +248,7 @@ router.put(
   '/:id',
   authMiddleware,
   generalRateLimit,
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: Request, res: Response) => {
     if (!req.user) {
       throw new AppError('Authentification requise', 401, 'AUTH_REQUIRED');
     }
@@ -315,7 +316,7 @@ router.get(
   '/:id/collections',
   optionalAuthMiddleware,
   generalRateLimit,
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: Request, res: Response) => {
     const { id } = req.params;
     const includePrivate = req.user?.userId === id;
 
@@ -364,5 +365,6 @@ router.get(
 );
 
 export default router;
+
 
 

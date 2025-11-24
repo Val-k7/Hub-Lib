@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Github, LogOut, FileText, Plus, Menu, Shield, Share2, Users, Bell, Compass, Folder, Upload, GitBranch, Sparkles, Lightbulb } from "lucide-react";
+import { Github, LogOut, FileText, Plus, Menu, Shield, Users, Bell, Compass, Sparkles, Lightbulb, LogIn, Home } from "lucide-react";
+import { FcGoogle } from "react-icons/fc";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { ThemeToggle } from "./ThemeToggle";
 import { LanguageToggle } from "./LanguageToggle";
@@ -8,6 +9,10 @@ import { useAuth } from "@/hooks/useAuth";
 import { useNotifications } from "@/hooks/useNotifications";
 import { useTranslation } from "react-i18next";
 import { useState } from "react";
+import { useCreateResource } from "@/contexts/CreateResourceContext";
+import { useTemplateSelector } from "@/contexts/TemplateSelectorContext";
+import { useIsAdmin } from "@/hooks/usePermissions";
+import { NotificationsPanel } from "@/components/NotificationsPanel";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -28,12 +33,17 @@ import { Separator } from "@/components/ui/separator";
 
 export const Header = () => {
   const { t } = useTranslation();
-  const { user, signOut, signInWithGitHub } = useAuth();
-  const { unreadCount } = useNotifications();
+  const { user, signOut, signInWithGitHub, signInWithGoogle } = useAuth();
+  const isAuthenticated = Boolean(user);
+  const { unreadCount } = useNotifications({ enabled: isAuthenticated });
   const navigate = useNavigate();
   const location = useLocation();
   const [loading, setLoading] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const { openCreateResource } = useCreateResource();
+  const { openTemplateSelector } = useTemplateSelector();
+  const isAdmin = useIsAdmin();
 
   const handleSignOut = async () => {
     await signOut();
@@ -44,26 +54,13 @@ export const Header = () => {
   const handleGitHubSignIn = async () => {
     setLoading(true);
     await signInWithGitHub();
+    setLoading(false);
   };
 
-  const handleSectionClick = (e: React.MouseEvent<HTMLAnchorElement>, sectionId: string) => {
-    e.preventDefault();
-    setMobileMenuOpen(false);
-    
-    if (location.pathname !== "/") {
-      navigate("/");
-      setTimeout(() => {
-        const element = document.getElementById(sectionId);
-        if (element) {
-          element.scrollIntoView({ behavior: "smooth", block: "start" });
-        }
-      }, 100);
-    } else {
-      const element = document.getElementById(sectionId);
-      if (element) {
-        element.scrollIntoView({ behavior: "smooth", block: "start" });
-      }
-    }
+  const handleGoogleSignIn = async () => {
+    setLoading(true);
+    await signInWithGoogle();
+    setLoading(false);
   };
 
   const handleNavigate = (path: string) => {
@@ -72,7 +69,8 @@ export const Header = () => {
   };
 
   return (
-    <header 
+    <>
+      <header 
       className="fixed top-0 left-0 right-0 z-50 border-b border-border/50 bg-background/95 backdrop-blur-lg transition-all duration-300"
       role="banner"
     >
@@ -94,6 +92,15 @@ export const Header = () => {
             role="navigation"
             aria-label="Navigation principale"
           >
+            <Button
+              variant="secondary"
+              size="sm"
+              className="gap-1.5 shadow-sm hover:shadow-md transition-all"
+              onClick={() => navigate("/")}
+            >
+              <Home className="h-4 w-4" />
+              {t('nav.home')}
+            </Button>
             {/* Explorer */}
             <Link 
               to="/browse" 
@@ -106,45 +113,20 @@ export const Header = () => {
             </Link>
 
             {user && (
-              <>
-                {/* Ressources - Sous-menu */}
-                <DropdownMenu>
-                  <DropdownMenuTrigger className="relative text-sm font-medium text-foreground/80 hover:text-foreground transition-colors group flex items-center gap-1.5 outline-none data-[state=open]:text-foreground">
-                    <Folder className="h-4 w-4" />
-                    {t('nav.resources')}
-                    <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-primary transition-all group-hover:w-full group-data-[state=open]:w-full" aria-hidden="true" />
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="start" className="w-56">
-                    <DropdownMenuItem onClick={() => navigate("/my-resources")}>
-                      <FileText className="mr-2 h-4 w-4" />
-                      {t('nav.myResources')}
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => navigate("/collections")}>
-                      <Folder className="mr-2 h-4 w-4" />
-                      {t('nav.collections')}
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => navigate("/shared-with-me")}>
-                      <Share2 className="mr-2 h-4 w-4" />
-                      {t('nav.sharedWithMe')}
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-
-                {/* Espaces */}
-                <Link 
-                  to="/groups" 
-                  className="relative text-sm font-medium text-foreground/80 hover:text-foreground transition-colors group flex items-center gap-1.5"
-                  aria-current={location.pathname === '/groups' ? 'page' : undefined}
-                >
-                  <Users className="h-4 w-4" />
-                  {t('nav.spaces')}
-                  <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-primary transition-all group-hover:w-full" aria-hidden="true" />
-                </Link>
-              </>
+              <Link 
+                to="/groups" 
+                className="relative text-sm font-medium text-foreground/80 hover:text-foreground transition-colors group flex items-center gap-1.5"
+                aria-current={location.pathname === '/groups' ? 'page' : undefined}
+              >
+                <Users className="h-4 w-4" />
+                {t('nav.spaces')}
+                <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-primary transition-all group-hover:w-full" aria-hidden="true" />
+              </Link>
             )}
 
             {/* Créer - Bouton primaire avec dropdown */}
-            {user && (
+            {/* Bouton Créer - Uniquement pour les admins */}
+            {user && isAdmin && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button 
@@ -157,46 +139,30 @@ export const Header = () => {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-56">
-                  <DropdownMenuItem onClick={() => navigate("/create-resource")}>
+                  <DropdownMenuItem onClick={() => openCreateResource()}>
                     <Plus className="mr-2 h-4 w-4" />
                     {t('nav.createResource')}
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => navigate("/templates")}>
+                  <DropdownMenuItem onClick={() => openTemplateSelector()}>
                     <Sparkles className="mr-2 h-4 w-4" />
                     {t('nav.useTemplate')}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => {
-                    navigate("/create-resource?type=github");
-                  }}>
-                    <GitBranch className="mr-2 h-4 w-4" />
-                    {t('nav.importGitHub')}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => {
-                    navigate("/create-resource?type=upload");
-                  }}>
-                    <Upload className="mr-2 h-4 w-4" />
-                    {t('nav.uploadFile')}
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
             )}
 
             {/* Suggérer - Bouton pour rediriger vers la page de suggestions */}
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-1.5"
-              onClick={() => {
-                if (!user) {
-                  navigate("/auth");
-                  return;
-                }
-                navigate("/suggestions");
-              }}
-            >
-              <Lightbulb className="h-4 w-4" />
-              Suggérer
-            </Button>
+            {user && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5"
+                onClick={() => navigate("/suggestions")}
+              >
+                <Lightbulb className="h-4 w-4" />
+                Suggérer
+              </Button>
+            )}
           </nav>
 
           <div className="flex items-center gap-2">
@@ -205,7 +171,7 @@ export const Header = () => {
                 variant="ghost"
                 size="sm"
                 className="relative"
-                onClick={() => navigate("/notifications")}
+                onClick={() => setNotificationsOpen(true)}
                 aria-label={`Notifications${unreadCount > 0 ? `, ${unreadCount} non lues` : ''}`}
                 aria-live="polite"
               >
@@ -258,34 +224,6 @@ export const Header = () => {
                     
                     {user && (
                       <>
-                        {/* Ressources */}
-                        <div className="space-y-2">
-                          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4">
-                            {t('nav.resources')}
-                          </p>
-                          <button
-                            onClick={() => handleNavigate("/my-resources")}
-                            className="w-full text-left flex items-center gap-2 text-base font-medium text-foreground/80 hover:text-foreground transition-colors py-2 hover:bg-muted/50 px-4 rounded-lg"
-                          >
-                            <FileText className="h-4 w-4" />
-                            {t('nav.myResources')}
-                          </button>
-                          <button
-                            onClick={() => handleNavigate("/collections")}
-                            className="w-full text-left flex items-center gap-2 text-base font-medium text-foreground/80 hover:text-foreground transition-colors py-2 hover:bg-muted/50 px-4 rounded-lg"
-                          >
-                            <Folder className="h-4 w-4" />
-                            {t('nav.collections')}
-                          </button>
-                          <button
-                            onClick={() => handleNavigate("/shared-with-me")}
-                            className="w-full text-left flex items-center gap-2 text-base font-medium text-foreground/80 hover:text-foreground transition-colors py-2 hover:bg-muted/50 px-4 rounded-lg"
-                          >
-                            <Share2 className="h-4 w-4" />
-                            {t('nav.sharedWithMe')}
-                          </button>
-                        </div>
-
                         {/* Espaces */}
                         <button
                           onClick={() => handleNavigate("/groups")}
@@ -318,40 +256,34 @@ export const Header = () => {
                           </div>
                         </div>
                         
-                        {/* Créer - Section mobile */}
-                        <div className="space-y-2">
-                          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4">
-                            {t('nav.create')}
-                          </p>
-                          <button
-                            onClick={() => handleNavigate("/create-resource")}
-                            className="w-full text-left flex items-center gap-2 text-base font-medium text-foreground/80 hover:text-foreground transition-colors py-2 hover:bg-muted/50 px-4 rounded-lg"
-                          >
-                            <Plus className="h-4 w-4" />
-                            {t('nav.createResource')}
-                          </button>
-                          <button
-                            onClick={() => handleNavigate("/templates")}
-                            className="w-full text-left flex items-center gap-2 text-base font-medium text-foreground/80 hover:text-foreground transition-colors py-2 hover:bg-muted/50 px-4 rounded-lg"
-                          >
-                            <Sparkles className="h-4 w-4" />
-                            {t('nav.useTemplate')}
-                          </button>
-                          <button
-                            onClick={() => handleNavigate("/create-resource?type=github")}
-                            className="w-full text-left flex items-center gap-2 text-base font-medium text-foreground/80 hover:text-foreground transition-colors py-2 hover:bg-muted/50 px-4 rounded-lg"
-                          >
-                            <GitBranch className="h-4 w-4" />
-                            {t('nav.importGitHub')}
-                          </button>
-                          <button
-                            onClick={() => handleNavigate("/create-resource?type=upload")}
-                            className="w-full text-left flex items-center gap-2 text-base font-medium text-foreground/80 hover:text-foreground transition-colors py-2 hover:bg-muted/50 px-4 rounded-lg"
-                          >
-                            <Upload className="h-4 w-4" />
-                            {t('nav.uploadFile')}
-                          </button>
-                        </div>
+                        {/* Créer - Section mobile - Uniquement pour les admins */}
+                        {isAdmin && (
+                          <div className="space-y-2">
+                            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4">
+                              {t('nav.create')}
+                            </p>
+                            <button
+                              onClick={() => {
+                                setMobileMenuOpen(false);
+                                openCreateResource();
+                              }}
+                              className="w-full text-left flex items-center gap-2 text-base font-medium text-foreground/80 hover:text-foreground transition-colors py-2 hover:bg-muted/50 px-4 rounded-lg"
+                            >
+                              <Plus className="h-4 w-4" />
+                              {t('nav.createResource')}
+                            </button>
+                            <button
+                              onClick={() => {
+                                setMobileMenuOpen(false);
+                                openTemplateSelector();
+                              }}
+                              className="w-full text-left flex items-center gap-2 text-base font-medium text-foreground/80 hover:text-foreground transition-colors py-2 hover:bg-muted/50 px-4 rounded-lg"
+                            >
+                              <Sparkles className="h-4 w-4" />
+                              {t('nav.useTemplate')}
+                            </button>
+                          </div>
+                        )}
 
                         {/* Suggérer - Section mobile */}
                         <div className="space-y-2">
@@ -385,15 +317,45 @@ export const Header = () => {
                         </button>
                       </div>
                     ) : (
-                      <Button 
-                        variant="hero" 
-                        className="gap-2 w-full"
-                        onClick={handleGitHubSignIn}
-                        disabled={loading}
-                      >
-                        <Github className="h-4 w-4" />
-                        {loading ? t('common.loading') : t('auth.signInWithGitHub')}
-                      </Button>
+                      <div className="space-y-3">
+                        {/* Bouton Login simple */}
+                        <Button 
+                          variant="outline" 
+                          className="gap-2 w-full border-border/50 hover:bg-accent/50 transition-all"
+                          onClick={() => {
+                            setMobileMenuOpen(false);
+                            navigate("/auth");
+                          }}
+                        >
+                          <LogIn className="h-4 w-4" />
+                          {t('auth.signIn')}
+                        </Button>
+                        
+                        {/* Boutons OAuth avec logos - même style uniforme */}
+                        <div className="flex items-center gap-2">
+                          {/* Bouton GitHub avec logo */}
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="flex-1 h-10 gap-2 border-border/50 hover:bg-accent/50 transition-all"
+                            onClick={handleGitHubSignIn}
+                            disabled={loading}
+                          >
+                            <Github className="h-4 w-4" />
+                          </Button>
+                          
+                          {/* Bouton Google avec logo */}
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="flex-1 h-10 gap-2 border-border/50 hover:bg-accent/50 transition-all"
+                            onClick={handleGoogleSignIn}
+                            disabled={loading}
+                          >
+                            <FcGoogle className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
                     )}
                   </nav>
                 </SheetContent>
@@ -431,7 +393,7 @@ export const Header = () => {
                     <FileText className="mr-2 h-4 w-4" />
                     <span>{t('nav.myResources')}</span>
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => navigate("/create-resource")}>
+                  <DropdownMenuItem onClick={() => openCreateResource()}>
                     <Plus className="mr-2 h-4 w-4" />
                     <span>{t('resources.create')}</span>
                   </DropdownMenuItem>
@@ -451,20 +413,52 @@ export const Header = () => {
                 </DropdownMenuContent>
               </DropdownMenu>
             ) : (
-              <Button 
-                variant="hero" 
-                size="sm" 
-                className="hidden md:flex gap-2 hover-scale shadow-glow"
-                onClick={handleGitHubSignIn}
-                disabled={loading}
-              >
-                <Github className="h-4 w-4" />
-                {loading ? "Connexion..." : "Connecter GitHub"}
-              </Button>
+              <div className="hidden md:flex items-center gap-2">
+                {/* Bouton Login simple */}
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="gap-2 border-border/50 hover:bg-accent/50 transition-all"
+                  onClick={() => navigate("/auth")}
+                >
+                  <LogIn className="h-4 w-4" />
+                  {t('auth.signIn')}
+                </Button>
+                
+                {/* Bouton GitHub avec logo */}
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="h-9 w-9 p-0 border-border/50 hover:bg-accent/50 transition-all"
+                  onClick={handleGitHubSignIn}
+                  disabled={loading}
+                  aria-label="Connexion avec GitHub"
+                  title="Connexion avec GitHub"
+                >
+                  <Github className="h-4 w-4" />
+                </Button>
+                
+                {/* Bouton Google avec logo */}
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="h-9 w-9 p-0 border-border/50 hover:bg-accent/50 transition-all"
+                  onClick={handleGoogleSignIn}
+                  disabled={loading}
+                  aria-label="Connexion avec Google"
+                  title="Connexion avec Google"
+                >
+                  <FcGoogle className="h-4 w-4" />
+                </Button>
+              </div>
             )}
           </div>
         </div>
       </div>
-    </header>
+      </header>
+      {user && (
+        <NotificationsPanel open={notificationsOpen} onOpenChange={setNotificationsOpen} />
+      )}
+    </>
   );
 };

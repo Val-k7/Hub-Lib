@@ -1,77 +1,33 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { localClient } from "@/integrations/local/client";
 import { useToast } from "@/hooks/use-toast";
 import { useEffect } from "react";
+import { notificationService, type Notification } from "@/services/notificationService";
+import { getErrorMessage } from "@/types/errors";
 
-export interface Notification {
-  id: string;
-  user_id: string;
-  type: string;
-  title: string;
-  message: string;
-  resource_id: string | null;
-  group_id: string | null;
-  is_read: boolean;
-  created_at: string;
-}
+type UseNotificationsOptions = {
+  enabled?: boolean;
+};
 
-export const useNotifications = () => {
+export const useNotifications = (options?: UseNotificationsOptions) => {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
   const { data: notifications = [], isLoading } = useQuery({
     queryKey: ["notifications"],
     queryFn: async () => {
-      const { data: { user } } = await localClient.auth.getUser();
-      if (!user) return [];
-
-      const { data, error } = await localClient
-        .from("notifications")
-        .select("*")
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: false })
-        .limit(50)
-        .execute();
-
-      if (error) throw error;
-      return data as Notification[];
+      return notificationService.listNotifications();
     },
+    enabled: options?.enabled ?? true,
   });
 
-  // Subscribe to real-time notifications
+  // Subscribe to real-time notifications via WebSocket
+  // TODO: Implement WebSocket subscription when websocket service is ready
   useEffect(() => {
-    const channel = localClient
-      .channel("notifications")
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "notifications",
-        },
-        (payload: any) => {
-          const newNotification = payload.new as Notification;
-          
-          // Show toast notification
-          toast({
-            title: newNotification.title,
-            description: newNotification.message,
-          });
-
-          // Update query cache
-          queryClient.invalidateQueries({ queryKey: ["notifications"] });
-        }
-      )
-      .subscribe();
-
-    return () => {
-      if (channel && channel.unsubscribe) {
-        channel.unsubscribe();
-      }
-    };
+    // Note: WebSocket subscription would be handled by the websocket service
+    // For now, we rely on polling or manual refresh
   }, [queryClient, toast]);
 
-  const unreadCount = notifications.filter((n) => !n.is_read).length;
+  const unreadCount = notifications.filter((n) => !n.isRead).length;
 
   return {
     notifications,
@@ -85,15 +41,14 @@ export const useMarkAsRead = () => {
 
   return useMutation({
     mutationFn: async (notificationId: string) => {
-      const { error } = await localClient
-        .from("notifications")
-        .update({ is_read: true })
-        .eq("id", notificationId);
-
-      if (error) throw error;
+      await notificationService.markAsRead(notificationId);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["notifications"] });
+    },
+    onError: (error: unknown) => {
+      // Error handling is done by the service
+      console.error("Erreur lors du marquage comme lu:", getErrorMessage(error));
     },
   });
 };
@@ -104,17 +59,19 @@ export const useMarkAllAsRead = () => {
 
   return useMutation({
     mutationFn: async () => {
-      const { error } = await localClient
-        .from("notifications")
-        .update({ is_read: true })
-        .eq("is_read", false);
-
-      if (error) throw error;
+      await notificationService.markAllAsRead();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["notifications"] });
       toast({
         title: "Notifications marquées comme lues",
+      });
+    },
+    onError: (error: unknown) => {
+      toast({
+        title: "Erreur",
+        description: getErrorMessage(error) || "Impossible de marquer toutes les notifications comme lues",
+        variant: "destructive",
       });
     },
   });

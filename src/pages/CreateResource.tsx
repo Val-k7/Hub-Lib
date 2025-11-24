@@ -26,6 +26,7 @@ import { useToast } from "@/hooks/use-toast";
 import { z } from "zod";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+import { logger } from "@/lib/logger";
 
 const categories = [
   "Documents & Fichiers",
@@ -145,7 +146,7 @@ const CreateResource = () => {
 
         setExistingTags(Array.from(allTags));
       } catch (error) {
-        console.error("Erreur lors de la récupération des tags:", error);
+        logger.error("Erreur lors de la récupération des tags", undefined, error instanceof Error ? error : new Error(String(error)));
       }
     };
 

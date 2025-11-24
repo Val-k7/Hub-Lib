@@ -4,6 +4,8 @@
 
 import Redis from 'ioredis';
 import { env } from './env.js';
+import { logger } from '../utils/logger.js';
+import type { RedisOptions } from '../types/common.js';
 
 // Singleton Redis Client
 let redis: Redis;
@@ -14,7 +16,7 @@ declare global {
 }
 
 const createRedisClient = (): Redis => {
-  const options: Redis.RedisOptions = {
+  const options: RedisOptions = {
     host: env.REDIS_HOST,
     port: env.REDIS_PORT,
     password: env.REDIS_PASSWORD,
@@ -33,7 +35,6 @@ const createRedisClient = (): Redis => {
     keepAlive: 30000,
     // Options de performance
     enableAutoPipelining: true,
-    maxLoadingTimeout: 5000,
   };
 
   return new Redis(options);
@@ -51,15 +52,15 @@ if (env.NODE_ENV === 'production') {
 
 // Gestion des erreurs Redis
 redis.on('error', (error) => {
-  console.error('❌ Erreur Redis:', error);
+  logger.error('Erreur Redis', error);
 });
 
 redis.on('connect', () => {
-  console.log('✅ Connecté à Redis');
+  logger.info('Connecté à Redis');
 });
 
 redis.on('ready', () => {
-  console.log('✅ Redis prêt');
+  logger.info('Redis prêt');
 });
 
 // Gestion de la fermeture propre

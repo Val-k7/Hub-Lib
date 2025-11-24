@@ -2,7 +2,7 @@
  * Service de gestion de la hiérarchie des catégories
  */
 
-import { client } from.*client';
+import { client } from '@/integrations/client';
 
 export interface CategoryHierarchy {
   id: string;

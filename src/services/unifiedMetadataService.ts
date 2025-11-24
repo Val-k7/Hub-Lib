@@ -5,6 +5,7 @@
 
 import { client } from '@/integrations/client';
 import { metadataService } from './metadataService';
+import type { Suggestion, SuggestionVote } from '@/types/suggestions';
 
 export type MetadataType = "category" | "tag" | "resource_type" | "filter";
 
@@ -45,7 +46,7 @@ class UnifiedMetadataService {
 
     // Récupérer les éléments existants (approuvés uniquement)
     const approvedSuggestions = (suggestions || []).filter(
-      (s: any) => s.status === "approved"
+      (s: Suggestion) => s.status === "approved"
     );
 
     // Récupérer les éléments existants depuis les ressources
@@ -53,7 +54,7 @@ class UnifiedMetadataService {
 
     // Combiner et mapper les suggestions
     const suggestionItems = await Promise.all(
-      (suggestions || []).map(async (suggestion: any) => {
+      (suggestions || []).map(async (suggestion: Suggestion) => {
         // Récupérer les votes pour cette suggestion
         const { data: votes } = await client
           .from("suggestion_votes")
@@ -61,11 +62,12 @@ class UnifiedMetadataService {
           .eq("suggestion_id", suggestion.id)
           .execute();
 
-        const upvotes = (votes || []).filter((v: any) => v.vote_type === "upvote").length;
-        const downvotes = (votes || []).filter((v: any) => v.vote_type === "downvote").length;
+        const typedVotes = (votes || []) as SuggestionVote[];
+        const upvotes = typedVotes.filter((v) => v.vote_type === "upvote").length;
+        const downvotes = typedVotes.filter((v) => v.vote_type === "downvote").length;
         const score = upvotes - downvotes;
-        const userVote = userId && votes
-          ? votes.find((v: any) => v.user_id === userId)
+        const userVote = userId && typedVotes
+          ? typedVotes.find((v) => v.user_id === userId)
           : null;
 
         return {
@@ -268,8 +270,9 @@ class UnifiedMetadataService {
       .eq("suggestion_id", suggestionId)
       .execute();
 
-    const upvotes = (votes || []).filter((v: any) => v.vote_type === "upvote").length;
-    const downvotes = (votes || []).filter((v: any) => v.vote_type === "downvote").length;
+    const typedVotes = (votes || []) as SuggestionVote[];
+    const upvotes = typedVotes.filter((v) => v.vote_type === "upvote").length;
+    const downvotes = typedVotes.filter((v) => v.vote_type === "downvote").length;
     const score = upvotes - downvotes;
 
     // Mettre à jour le compteur de votes

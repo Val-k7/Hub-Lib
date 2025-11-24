@@ -2,12 +2,16 @@ import { Suspense, lazy } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
 import { AnimatePresence } from "framer-motion";
 import { PageTransition } from "@/components/PageTransition";
 import { ScrollToTop } from "@/components/ScrollToTop";
 import { PageLoader } from "@/components/LoadingStates";
+import { CreateResourceProvider } from "@/contexts/CreateResourceContext";
+import { CreateResourceOverlay } from "@/components/CreateResourceOverlay";
+import { TemplateSelectorProvider } from "@/contexts/TemplateSelectorContext";
+import { TemplateSelectorOverlay } from "@/components/TemplateSelectorOverlay";
+import { ProtectedRoute } from "@/components/ProtectedRoute";
 
 // Eager load: Homepage and Auth (needed immediately)
 import Index from "./pages/Index";
@@ -31,17 +35,7 @@ const ApiSettings = lazy(() => import("./pages/ApiSettings"));
 const Collections = lazy(() => import("./pages/Collections"));
 const CollectionDetail = lazy(() => import("./pages/CollectionDetail"));
 const SuggestionsPage = lazy(() => import("./pages/SuggestionsPage"));
-
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      staleTime: 1000 * 60 * 5, // 5 minutes
-      gcTime: 1000 * 60 * 30, // 30 minutes (cache retention)
-      refetchOnWindowFocus: false,
-      retry: 1,
-    },
-  },
-});
+const MigrationPage = lazy(() => import("./pages/MigrationPage"));
 
 const AnimatedRoutes = () => {
   const location = useLocation();
@@ -64,7 +58,16 @@ const AnimatedRoutes = () => {
             <Route path="/" element={<PageTransition><Index /></PageTransition>} />
             <Route path="/browse" element={<PageTransition><Browse /></PageTransition>} />
             <Route path="/categories-tags" element={<PageTransition><CategoriesTagsPage /></PageTransition>} />
-            <Route path="/admin" element={<PageTransition><AdminPanel /></PageTransition>} />
+            <Route 
+              path="/admin" 
+              element={
+                <PageTransition>
+                  <ProtectedRoute requiredRole="admin">
+                    <AdminPanel />
+                  </ProtectedRoute>
+                </PageTransition>
+              } 
+            />
             <Route path="/resource/:id" element={<PageTransition><ResourceDetail /></PageTransition>} />
             <Route path="/resource/:id/edit" element={<PageTransition><EditResource /></PageTransition>} />
             <Route path="/auth" element={<PageTransition><Auth /></PageTransition>} />
@@ -79,6 +82,7 @@ const AnimatedRoutes = () => {
             <Route path="/collection/:id" element={<PageTransition><CollectionDetail /></PageTransition>} />
             <Route path="/api-settings" element={<PageTransition><ApiSettings /></PageTransition>} />
             <Route path="/suggestions" element={<PageTransition><SuggestionsPage /></PageTransition>} />
+            <Route path="/migration" element={<PageTransition><MigrationPage /></PageTransition>} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<PageTransition><NotFound /></PageTransition>} />
           </Routes>
@@ -89,16 +93,20 @@ const AnimatedRoutes = () => {
 };
 
 const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
-        <AnimatedRoutes />
-        <ScrollToTop />
-      </BrowserRouter>
-    </TooltipProvider>
-  </QueryClientProvider>
+  <TooltipProvider>
+    <CreateResourceProvider>
+      <TemplateSelectorProvider>
+        <Toaster />
+        <Sonner />
+        <BrowserRouter>
+          <AnimatedRoutes />
+          <ScrollToTop />
+          <CreateResourceOverlay />
+          <TemplateSelectorOverlay />
+        </BrowserRouter>
+      </TemplateSelectorProvider>
+    </CreateResourceProvider>
+  </TooltipProvider>
 );
 
 export default App;

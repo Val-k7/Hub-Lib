@@ -67,8 +67,15 @@ class LocalClient {
 
   /**
    * Initialise les données de base (catégories, tags, etc.)
+   * NE PAS appeler en production - uniquement pour le développement local
    */
   private async initSeedData(): Promise<void> {
+    // NE PAS initialiser en production
+    const isProduction = import.meta.env.PROD || (typeof window !== 'undefined' && !window.location.hostname.includes('localhost'));
+    if (isProduction) {
+      return; // Ne pas seed en production
+    }
+
     // Vérifier si déjà initialisé
     const { data: existing } = await this
       .from("category_tag_suggestions")
@@ -136,47 +143,54 @@ class LocalClient {
       }
     });
 
-    // Créer un utilisateur admin par défaut si aucun utilisateur n'existe
-    const users = this.getTable("profiles");
-    if (users.length === 0) {
-      const adminId = this.generateId();
-      const adminUser: LocalUser = {
-        id: adminId,
-        email: "admin@example.com",
-        user_metadata: {
-          full_name: "Administrateur",
-        },
-        created_at: new Date().toISOString(),
-      };
-
-      this.setTable("profiles", [
-        {
+    // NE PAS créer d'utilisateur admin automatiquement en production
+    // Cette fonctionnalité est uniquement pour le développement local
+    // En production, les utilisateurs doivent s'inscrire via l'API
+    const isProduction = import.meta.env.PROD || window.location.hostname !== 'localhost';
+    
+    if (!isProduction) {
+      // Créer un utilisateur admin par défaut UNIQUEMENT en développement local
+      const users = this.getTable("profiles");
+      if (users.length === 0) {
+        const adminId = this.generateId();
+        const adminUser: LocalUser = {
           id: adminId,
-          username: "admin",
-          full_name: "Administrateur",
-          avatar_url: null,
-          bio: null,
-          github_username: null,
+          email: "admin@example.com",
+          user_metadata: {
+            full_name: "Administrateur",
+          },
           created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        },
-      ]);
+        };
 
-      this.setTable("user_roles", [
-        {
-          id: this.generateId(),
-          user_id: adminId,
-          role: "admin",
-          created_at: new Date().toISOString(),
-        },
-      ]);
+        this.setTable("profiles", [
+          {
+            id: adminId,
+            username: "admin",
+            full_name: "Administrateur",
+            avatar_url: null,
+            bio: null,
+            github_username: null,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          },
+        ]);
 
-      // Créer une session pour l'admin
-      const session: LocalSession = {
-        access_token: "admin-token",
-        user: adminUser,
-      };
-      this.storage.setItem(this.authKey, JSON.stringify(session));
+        this.setTable("user_roles", [
+          {
+            id: this.generateId(),
+            user_id: adminId,
+            role: "admin",
+            created_at: new Date().toISOString(),
+          },
+        ]);
+
+        // Créer une session pour l'admin
+        const session: LocalSession = {
+          access_token: "admin-token",
+          user: adminUser,
+        };
+        this.storage.setItem(this.authKey, JSON.stringify(session));
+      }
     }
   }
 
@@ -461,113 +475,13 @@ class LocalClient {
       options?: { redirectTo?: string };
     }): Promise<{ error: any }> => {
       try {
-        // Import dynamique pour éviter les problèmes de dépendances circulaires
-        const { simulateOAuthLogin } = await import('@/lib/oauth');
-        const { getOAuthConfig, isEmailAllowed, canAutoCreateUser } = await import('@/lib/oauthConfig');
+        // Utiliser la vraie intégration OAuth avec le backend
+        const { initiateOAuthLogin } = await import('@/lib/oauth');
         
-        // Simuler la connexion OAuth
-        const oauthProfile = await simulateOAuthLogin(options.provider);
-
-        // Valider que le profil OAuth a un email valide
-        if (!oauthProfile.email || !oauthProfile.email.includes('@')) {
-          return { error: { message: "Email OAuth invalide" } };
-        }
-
-        // Vérifier si l'email est autorisé selon la configuration
-        const config = getOAuthConfig();
-        if (!isEmailAllowed(oauthProfile.email)) {
-          return { error: { message: "Domaine email non autorisé pour OAuth" } };
-        }
-
-        const profiles = this.getTable("profiles");
-        let user = profiles.find((p: any) => p.email === oauthProfile.email);
-
-        if (!user) {
-          // Vérifier si la création automatique est autorisée
-          if (!canAutoCreateUser()) {
-            return { error: { message: "Aucun compte trouvé avec cet email. Veuillez d'abord créer un compte." } };
-          }
-          // Créer un nouvel utilisateur depuis le profil OAuth
-          const userId = this.generateId();
-          user = {
-            id: userId,
-            email: oauthProfile.email,
-            username: oauthProfile.username || oauthProfile.email.split("@")[0],
-            full_name: oauthProfile.name,
-            avatar_url: oauthProfile.avatar || null,
-            bio: null,
-            github_username: options.provider === "github" ? oauthProfile.username : null,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          };
-          this.setTable("profiles", [...profiles, user]);
-
-          // Créer un rôle utilisateur par défaut
-          const roles = this.getTable("user_roles");
-          this.setTable("user_roles", [
-            ...roles,
-            {
-              id: this.generateId(),
-              user_id: userId,
-              role: "user",
-              created_at: new Date().toISOString(),
-            },
-          ]);
-
-          // Créer des données d'authentification pour OAuth (pas de mot de passe)
-          // Les utilisateurs OAuth n'ont pas besoin de mot de passe
-          const { authStorage } = await import('./authStorage');
-          // On ne crée pas de données d'auth pour OAuth car ils n'ont pas de mot de passe
-        } else {
-          // Mettre à jour le profil avec les données OAuth
-          user.avatar_url = oauthProfile.avatar || user.avatar_url;
-          user.full_name = oauthProfile.name || user.full_name;
-          if (options.provider === "github" && oauthProfile.username) {
-            user.github_username = oauthProfile.username;
-          }
-          user.updated_at = new Date().toISOString();
-          this.setTable("profiles", profiles);
-        }
-
-        const localUser: LocalUser = {
-          id: user.id,
-          email: oauthProfile.email,
-          user_metadata: {
-            full_name: user.full_name,
-            avatar_url: user.avatar_url,
-          },
-          created_at: user.created_at,
-        };
-
-      const session: LocalSession = {
-        access_token: this.generateId(),
-        user: localUser,
-        expires_at: Date.now() + 7 * 24 * 60 * 60 * 1000,
-      };
-
-      this.storage.setItem(this.authKey, JSON.stringify(session));
-
-      window.dispatchEvent(
-        new CustomEvent("auth-state-changed", { detail: { session } })
-      );
-
-        // Track analytics
-        if (typeof window !== 'undefined') {
-          try {
-            const { analyticsService } = await import('@/services/analyticsService');
-            analyticsService.track('oauth_login', { provider: options.provider }, user.id);
-          } catch (e) {
-            // Ignorer si analytics n'est pas disponible
-          }
-        }
-
-        // Simuler une redirection
-        if (options.options?.redirectTo) {
-          setTimeout(() => {
-            window.location.href = options.options.redirectTo!;
-          }, 100);
-        }
-
+        // Rediriger vers la route OAuth du backend
+        await initiateOAuthLogin(options.provider, options.options?.redirectTo);
+        
+        // Cette ligne ne sera jamais atteinte car initiateOAuthLogin redirige
         return { error: null };
       } catch (error: any) {
         return { error: { message: error.message || "Erreur lors de la connexion OAuth" } };

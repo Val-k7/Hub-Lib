@@ -3,6 +3,7 @@
  */
 
 import express from 'express';
+import { Request, Response } from 'express';
 import { z } from 'zod';
 import { prisma } from '../config/database.js';
 import { authMiddleware, optionalAuthMiddleware } from '../middleware/auth.js';
@@ -41,7 +42,7 @@ router.get(
   '/',
   optionalAuthMiddleware,
   generalRateLimit,
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: Request, res: Response) => {
     const filters = suggestionFiltersSchema.parse(req.query);
     const skip = (filters.page - 1) * filters.limit;
 
@@ -66,6 +67,9 @@ router.get(
       }
     }
 
+    // Mapper votes_count vers votesCount pour Prisma
+    const sortByField = filters.sortBy === 'votes_count' ? 'votesCount' : filters.sortBy;
+
     const [suggestions, total] = await Promise.all([
       prisma.categoryTagSuggestion.findMany({
         where,
@@ -84,7 +88,7 @@ router.get(
           },
         },
         orderBy: {
-          [filters.sortBy]: filters.sortOrder,
+          [sortByField]: filters.sortOrder,
         },
         skip,
         take: filters.limit,
@@ -136,7 +140,7 @@ router.get(
   '/:id',
   optionalAuthMiddleware,
   generalRateLimit,
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: Request, res: Response) => {
     const { id } = req.params;
 
     const suggestion = await prisma.categoryTagSuggestion.findUnique({
@@ -201,7 +205,7 @@ router.post(
   '/',
   authMiddleware,
   generalRateLimit,
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: Request, res: Response) => {
     if (!req.user) {
       throw new AppError('Authentification requise', 401, 'AUTH_REQUIRED');
     }
@@ -262,7 +266,7 @@ router.post(
   '/:id/vote',
   authMiddleware,
   generalRateLimit,
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: Request, res: Response) => {
     if (!req.user) {
       throw new AppError('Authentification requise', 401, 'AUTH_REQUIRED');
     }
@@ -315,7 +319,7 @@ router.delete(
   '/:id/vote',
   authMiddleware,
   generalRateLimit,
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: Request, res: Response) => {
     if (!req.user) {
       throw new AppError('Authentification requise', 401, 'AUTH_REQUIRED');
     }

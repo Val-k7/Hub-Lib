@@ -5,7 +5,7 @@
 /**
  * Database enum types
  */
-export type AppRole = 'admin' | 'user';
+export type AppRole = 'super_admin' | 'admin' | 'moderator' | 'user' | 'guest';
 export type SuggestionType = 'category' | 'tag';
 export type SuggestionStatus = 'pending' | 'approved' | 'rejected';
 

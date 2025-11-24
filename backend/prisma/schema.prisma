@@ -2,7 +2,8 @@
 // Généré à partir du schéma PostgreSQL
 
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
 }
 
 datasource db {
@@ -15,34 +16,40 @@ datasource db {
 // =============================================================================
 
 model Profile {
-  id               String    @id @default(uuid()) @db.Uuid
-  userId           String    @unique @map("user_id") @db.Uuid
-  email            String    @unique
-  username         String?   @unique
-  fullName         String?   @map("full_name")
-  bio              String?   @db.Text
-  avatarUrl        String?   @map("avatar_url") @db.Text
-  githubUsername   String?   @map("github_username")
-  preferredLayout  String?   @map("preferred_layout")
-  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt        DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id              String   @id @default(uuid()) @db.Uuid
+  userId          String   @unique @map("user_id") @db.Uuid
+  email           String   @unique
+  username        String?  @unique
+  fullName        String?  @map("full_name")
+  bio             String?  @db.Text
+  avatarUrl       String?  @map("avatar_url") @db.Text
+  githubUsername  String?  @map("github_username")
+  preferredLayout String?  @map("preferred_layout")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   // Relations
-  resources          Resource[]
-  savedResources     SavedResource[]
-  resourceRatings    ResourceRating[]
-  resourceComments   ResourceComment[]
-  resourceShares     ResourceShare[]
-  ownedGroups        Group[]         @relation("GroupOwner")
-  groupMembers       GroupMember[]
-  notifications      Notification[]
-  suggestedItems     CategoryTagSuggestion[] @relation("SuggestedBy")
-  reviewedItems      CategoryTagSuggestion[] @relation("ReviewedBy")
-  suggestionVotes    SuggestionVote[]
-  userRole           UserRole?
-  createdTemplates   ResourceTemplate[]      @relation("TemplateCreator")
-  collections        Collection[]            @relation("CollectionOwner")
-  createdVersions    ResourceVersion[]
+  resources        Resource[]
+  savedResources   SavedResource[]
+  resourceRatings  ResourceRating[]
+  resourceComments ResourceComment[]
+  resourceShares   ResourceShare[]
+  ownedGroups      Group[]                 @relation("GroupOwner")
+  groupMembers     GroupMember[]
+  notifications    Notification[]
+  suggestedItems   CategoryTagSuggestion[] @relation("SuggestedBy")
+  reviewedItems    CategoryTagSuggestion[] @relation("ReviewedBy")
+  suggestionVotes  SuggestionVote[]
+  userRole         UserRole?
+  createdTemplates ResourceTemplate[]      @relation("TemplateCreator")
+  collections      Collection[]            @relation("CollectionOwner")
+  createdVersions  ResourceVersion[]
+  resourcePermissions ResourcePermission[]
+  authProfile      AuthProfile?
+  analyticsEvents  AnalyticsEvent[]
+  apiTokens        ApiToken[]
+  oauthAccounts    OAuthAccount[]
+  permissionAuditLogs PermissionAuditLog[] @relation("PermissionAuditActor")
 
   @@index([userId], map: "idx_profiles_user_id")
   @@index([email], map: "idx_profiles_email")
@@ -50,39 +57,55 @@ model Profile {
   @@map("profiles")
 }
 
-model Resource {
-  id              String             @id @default(uuid()) @db.Uuid
-  userId          String             @map("user_id") @db.Uuid
-  title           String             @db.VarChar(500)
-  description     String             @db.Text
-  category        String?
-  tags            String[]
-  resourceType    ResourceType       @default(external_link) @map("resource_type")
-  visibility      ResourceVisibility @default(public)
-  githubUrl       String?            @map("github_url") @db.Text
-  externalUrl     String?            @map("external_url") @db.Text
-  filePath        String?            @map("file_path") @db.Text
-  fileUrl         String?            @map("file_url") @db.Text
-  fileSize        String?            @map("file_size")
-  language        String?
-  license         String?
-  readme          String?            @db.Text
-  averageRating   Decimal?           @map("average_rating") @db.Decimal(3, 2) @default(0)
-  ratingsCount    Int                @default(0) @map("ratings_count")
-  downloadsCount  Int                @default(0) @map("downloads_count")
-  viewsCount      Int                @default(0) @map("views_count")
-  createdAt       DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt       DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
+model AuthProfile {
+  id           String   @id @default(uuid()) @db.Uuid
+  userId       String   @unique @map("user_id") @db.Uuid
+  passwordHash String   @map("password_hash") @db.VarChar(255)
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   // Relations
-  profile              Profile              @relation(fields: [userId], references: [userId], onDelete: Cascade)
-  savedResources       SavedResource[]
-  resourceRatings      ResourceRating[]
-  resourceShares       ResourceShare[]
-  resourceComments     ResourceComment[]
-  collectionResources  CollectionResource[]
-  resourceVersions     ResourceVersion[]
-  notifications        Notification[]
+  profile Profile @relation(fields: [userId], references: [userId], onDelete: Cascade)
+
+  @@index([userId], map: "idx_auth_profiles_user_id")
+  @@map("auth_profiles")
+}
+
+model Resource {
+  id             String             @id @default(uuid()) @db.Uuid
+  userId         String             @map("user_id") @db.Uuid
+  title          String             @db.VarChar(500)
+  description    String             @db.Text
+  category       String?
+  tags           String[]
+  resourceType   ResourceType       @default(external_link) @map("resource_type")
+  visibility     ResourceVisibility @default(public)
+  githubUrl      String?            @map("github_url") @db.Text
+  externalUrl    String?            @map("external_url") @db.Text
+  filePath       String?            @map("file_path") @db.Text
+  fileUrl        String?            @map("file_url") @db.Text
+  fileSize       String?            @map("file_size")
+  language       String?
+  license        String?
+  readme         String?            @db.Text
+  averageRating  Decimal?           @default(0) @map("average_rating") @db.Decimal(3, 2)
+  ratingsCount   Int                @default(0) @map("ratings_count")
+  downloadsCount Int                @default(0) @map("downloads_count")
+  viewsCount     Int                @default(0) @map("views_count")
+  createdAt      DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // Relations
+  profile             Profile              @relation(fields: [userId], references: [userId], onDelete: Cascade)
+  savedResources      SavedResource[]
+  resourceRatings     ResourceRating[]
+  resourceShares      ResourceShare[]
+  resourceComments    ResourceComment[]
+  collectionResources CollectionResource[]
+  resourceVersions    ResourceVersion[]
+  resourcePermissions ResourcePermission[]
+  notifications       Notification[]
+  analyticsEvents     AnalyticsEvent[]
 
   @@index([userId], map: "idx_resources_user_id")
   @@index([category], map: "idx_resources_category")
@@ -94,14 +117,14 @@ model Resource {
 }
 
 model SavedResource {
-  id         String    @id @default(uuid()) @db.Uuid
-  userId     String    @map("user_id") @db.Uuid
-  resourceId String    @map("resource_id") @db.Uuid
-  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  id         String   @id @default(uuid()) @db.Uuid
+  userId     String   @map("user_id") @db.Uuid
+  resourceId String   @map("resource_id") @db.Uuid
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
   // Relations
-  profile   Profile   @relation(fields: [userId], references: [userId], onDelete: Cascade)
-  resource  Resource  @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+  profile  Profile  @relation(fields: [userId], references: [userId], onDelete: Cascade)
+  resource Resource @relation(fields: [resourceId], references: [id], onDelete: Cascade)
 
   @@unique([userId, resourceId])
   @@index([userId], map: "idx_saved_resources_user_id")
@@ -118,8 +141,8 @@ model ResourceRating {
   updatedAt  DateTime? @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   // Relations
-  profile   Profile   @relation(fields: [userId], references: [userId], onDelete: Cascade)
-  resource  Resource  @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+  profile  Profile  @relation(fields: [userId], references: [userId], onDelete: Cascade)
+  resource Resource @relation(fields: [resourceId], references: [id], onDelete: Cascade)
 
   @@unique([userId, resourceId])
   @@index([userId], map: "idx_resource_ratings_user_id")
@@ -129,18 +152,19 @@ model ResourceRating {
 }
 
 model Group {
-  id          String    @id @default(uuid()) @db.Uuid
+  id          String   @id @default(uuid()) @db.Uuid
   name        String
-  description String?   @db.Text
-  ownerId     String    @map("owner_id") @db.Uuid
-  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  description String?  @db.Text
+  ownerId     String   @map("owner_id") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   // Relations
-  owner         Profile          @relation("GroupOwner", fields: [ownerId], references: [userId], onDelete: Cascade)
-  members       GroupMember[]
+  owner          Profile         @relation("GroupOwner", fields: [ownerId], references: [userId], onDelete: Cascade)
+  members        GroupMember[]
   resourceShares ResourceShare[]
-  notifications Notification[]
+  notifications  Notification[]
+  resourcePermissions ResourcePermission[]
 
   @@index([ownerId], map: "idx_groups_owner_id")
   @@index([createdAt], map: "idx_groups_created_at")
@@ -148,18 +172,18 @@ model Group {
 }
 
 model ResourceShare {
-  id               String         @id @default(uuid()) @db.Uuid
-  resourceId       String         @map("resource_id") @db.Uuid
-  sharedWithUserId String?        @map("shared_with_user_id") @db.Uuid
-  sharedWithGroupId String?       @map("shared_with_group_id") @db.Uuid
-  permission       PermissionType @default(read)
-  expiresAt        DateTime?      @map("expires_at") @db.Timestamptz(6)
-  createdAt        DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  id                String         @id @default(uuid()) @db.Uuid
+  resourceId        String         @map("resource_id") @db.Uuid
+  sharedWithUserId  String?        @map("shared_with_user_id") @db.Uuid
+  sharedWithGroupId String?        @map("shared_with_group_id") @db.Uuid
+  permission        PermissionType @default(read)
+  expiresAt         DateTime?      @map("expires_at") @db.Timestamptz(6)
+  createdAt         DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
 
   // Relations
-  resource         Resource  @relation(fields: [resourceId], references: [id], onDelete: Cascade)
-  sharedWithUser   Profile?  @relation(fields: [sharedWithUserId], references: [userId], onDelete: Cascade)
-  sharedWithGroup  Group?    @relation(fields: [sharedWithGroupId], references: [id], onDelete: Cascade)
+  resource        Resource @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+  sharedWithUser  Profile? @relation(fields: [sharedWithUserId], references: [userId], onDelete: Cascade)
+  sharedWithGroup Group?   @relation(fields: [sharedWithGroupId], references: [id], onDelete: Cascade)
 
   @@index([resourceId], map: "idx_resource_shares_resource_id")
   @@index([sharedWithUserId], map: "idx_resource_shares_user_id")
@@ -167,20 +191,41 @@ model ResourceShare {
   @@map("resource_shares")
 }
 
-model ResourceComment {
-  id         String            @id @default(uuid()) @db.Uuid
-  resourceId String            @map("resource_id") @db.Uuid
-  userId     String            @map("user_id") @db.Uuid
-  parentId   String?           @map("parent_id") @db.Uuid
-  content    String            @db.Text
-  createdAt  DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt  DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
+model ResourcePermission {
+  id          String   @id @default(uuid()) @db.Uuid
+  resourceId  String   @map("resource_id") @db.Uuid
+  userId      String?  @map("user_id") @db.Uuid
+  groupId     String?  @map("group_id") @db.Uuid
+  permission  String
+  expiresAt   DateTime? @map("expires_at") @db.Timestamptz(6)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
   // Relations
-  resource   Resource         @relation(fields: [resourceId], references: [id], onDelete: Cascade)
-  profile    Profile          @relation(fields: [userId], references: [userId], onDelete: Cascade)
-  parent     ResourceComment? @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
-  replies    ResourceComment[] @relation("CommentReplies")
+  resource Resource @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+  user     Profile? @relation(fields: [userId], references: [userId], onDelete: Cascade)
+  group    Group?   @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@index([resourceId], map: "idx_resource_permissions_resource_id")
+  @@index([userId], map: "idx_resource_permissions_user_id")
+  @@index([groupId], map: "idx_resource_permissions_group_id")
+  @@index([permission], map: "idx_resource_permissions_permission")
+  @@map("resource_permissions")
+}
+
+model ResourceComment {
+  id         String   @id @default(uuid()) @db.Uuid
+  resourceId String   @map("resource_id") @db.Uuid
+  userId     String   @map("user_id") @db.Uuid
+  parentId   String?  @map("parent_id") @db.Uuid
+  content    String   @db.Text
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // Relations
+  resource Resource          @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+  profile  Profile           @relation(fields: [userId], references: [userId], onDelete: Cascade)
+  parent   ResourceComment?  @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies  ResourceComment[] @relation("CommentReplies")
 
   @@index([resourceId], map: "idx_resource_comments_resource_id")
   @@index([userId], map: "idx_resource_comments_user_id")
@@ -190,15 +235,15 @@ model ResourceComment {
 }
 
 model GroupMember {
-  id       String    @id @default(uuid()) @db.Uuid
-  groupId  String    @map("group_id") @db.Uuid
-  userId   String    @map("user_id") @db.Uuid
-  role     GroupRole @default(member)
-  addedAt  DateTime  @default(now()) @map("added_at") @db.Timestamptz(6)
+  id      String    @id @default(uuid()) @db.Uuid
+  groupId String    @map("group_id") @db.Uuid
+  userId  String    @map("user_id") @db.Uuid
+  role    GroupRole @default(member)
+  addedAt DateTime  @default(now()) @map("added_at") @db.Timestamptz(6)
 
   // Relations
-  group    Group   @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  profile  Profile @relation(fields: [userId], references: [userId], onDelete: Cascade)
+  group   Group   @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  profile Profile @relation(fields: [userId], references: [userId], onDelete: Cascade)
 
   @@unique([groupId, userId])
   @@index([groupId], map: "idx_group_members_group_id")
@@ -207,20 +252,20 @@ model GroupMember {
 }
 
 model Notification {
-  id         String    @id @default(uuid()) @db.Uuid
-  userId     String    @map("user_id") @db.Uuid
+  id         String   @id @default(uuid()) @db.Uuid
+  userId     String   @map("user_id") @db.Uuid
   type       String
   title      String
-  message    String    @db.Text
-  resourceId String?   @map("resource_id") @db.Uuid
-  groupId    String?   @map("group_id") @db.Uuid
-  isRead     Boolean   @default(false) @map("is_read")
-  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  message    String   @db.Text
+  resourceId String?  @map("resource_id") @db.Uuid
+  groupId    String?  @map("group_id") @db.Uuid
+  isRead     Boolean  @default(false) @map("is_read")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
   // Relations
-  profile    Profile  @relation(fields: [userId], references: [userId], onDelete: Cascade)
-  resource   Resource? @relation(fields: [resourceId], references: [id], onDelete: Cascade)
-  group      Group?   @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  profile  Profile   @relation(fields: [userId], references: [userId], onDelete: Cascade)
+  resource Resource? @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+  group    Group?    @relation(fields: [groupId], references: [id], onDelete: Cascade)
 
   @@index([userId], map: "idx_notifications_user_id")
   @@index([isRead], map: "idx_notifications_is_read")
@@ -257,15 +302,15 @@ model CategoryTagSuggestion {
 }
 
 model SuggestionVote {
-  id           String     @id @default(uuid()) @db.Uuid
-  suggestionId String     @map("suggestion_id") @db.Uuid
-  userId       String     @map("user_id") @db.Uuid
-  voteType     VoteType   @map("vote_type")
-  createdAt    DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+  id           String   @id @default(uuid()) @db.Uuid
+  suggestionId String   @map("suggestion_id") @db.Uuid
+  userId       String   @map("user_id") @db.Uuid
+  voteType     VoteType @map("vote_type")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
   // Relations
-  suggestion   CategoryTagSuggestion @relation(fields: [suggestionId], references: [id], onDelete: Cascade)
-  profile      Profile              @relation(fields: [userId], references: [userId], onDelete: Cascade)
+  suggestion CategoryTagSuggestion @relation(fields: [suggestionId], references: [id], onDelete: Cascade)
+  profile    Profile               @relation(fields: [userId], references: [userId], onDelete: Cascade)
 
   @@unique([suggestionId, userId])
   @@index([suggestionId], map: "idx_suggestion_votes_suggestion_id")
@@ -274,61 +319,66 @@ model SuggestionVote {
 }
 
 model UserRole {
-  id        String   @id @default(uuid()) @db.Uuid
-  userId    String   @unique @map("user_id") @db.Uuid
-  role      AppRole  @default(user)
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @unique @map("user_id") @db.Uuid
+  role      AppRole   @default(user)
+  expiresAt DateTime? @map("expires_at") @db.Timestamptz(6) // Pour permissions temporaires
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   // Relations
-  profile   Profile  @relation(fields: [userId], references: [userId], onDelete: Cascade)
+  profile Profile @relation(fields: [userId], references: [userId], onDelete: Cascade)
 
+  @@index([userId], map: "idx_user_roles_user_id")
+  @@index([role], map: "idx_user_roles_role")
+  @@index([expiresAt], map: "idx_user_roles_expires_at")
   @@map("user_roles")
 }
 
 model AdminConfig {
-  id          String    @id @default(uuid()) @db.Uuid
-  key         String    @unique
-  value       Json      @db.JsonB
-  description String?   @db.Text
-  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id          String   @id @default(uuid()) @db.Uuid
+  key         String   @unique
+  value       Json     @db.JsonB
+  description String?  @db.Text
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   @@map("admin_configs")
 }
 
 model ResourceTemplate {
-  id          String    @id @default(uuid()) @db.Uuid
-  name        String
-  description String    @db.Text
-  category    String
-  tags        String[]
-  language    String?
-  readme      String?   @db.Text
-  icon        String?
-  preview     String?   @db.Text
-  isPublic    Boolean   @default(false) @map("is_public")
-  createdBy   String?   @map("created_by") @db.Uuid
-  usageCount  Int       @default(0) @map("usage_count")
+  id           String   @id @default(uuid()) @db.Uuid
+  name         String
+  description  String   @db.Text
+  category     String
+  tags         String[]
+  language     String?
+  readme       String?  @db.Text
+  icon         String?
+  preview      String?  @db.Text
+  isPublic     Boolean  @default(false) @map("is_public")
+  createdBy    String?  @map("created_by") @db.Uuid
+  usageCount   Int      @default(0) @map("usage_count")
   templateData Json     @map("template_data") @db.JsonB
-  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   // Relations
-  creator     Profile?  @relation("TemplateCreator", fields: [createdBy], references: [userId], onDelete: SetNull)
+  creator Profile? @relation("TemplateCreator", fields: [createdBy], references: [userId], onDelete: SetNull)
 
   @@map("resource_templates")
 }
 
 model Collection {
-  id              String              @id @default(uuid()) @db.Uuid
-  name            String
-  description     String?             @db.Text
-  userId          String              @map("user_id") @db.Uuid
-  isPublic        Boolean             @default(false) @map("is_public")
-  coverImageUrl   String?             @map("cover_image_url") @db.Text
-  resourcesCount  Int                 @default(0) @map("resources_count")
-  createdAt       DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt       DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id             String   @id @default(uuid()) @db.Uuid
+  name           String
+  description    String?  @db.Text
+  userId         String   @map("user_id") @db.Uuid
+  isPublic       Boolean  @default(false) @map("is_public")
+  coverImageUrl  String?  @map("cover_image_url") @db.Text
+  resourcesCount Int      @default(0) @map("resources_count")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   // Relations
   profile             Profile              @relation("CollectionOwner", fields: [userId], references: [userId], onDelete: Cascade)
@@ -341,15 +391,15 @@ model Collection {
 }
 
 model CollectionResource {
-  id           String    @id @default(uuid()) @db.Uuid
-  collectionId String    @map("collection_id") @db.Uuid
-  resourceId   String    @map("resource_id") @db.Uuid
-  addedAt      DateTime  @default(now()) @map("added_at") @db.Timestamptz(6)
-  orderIndex   Int       @default(0) @map("order_index")
+  id           String   @id @default(uuid()) @db.Uuid
+  collectionId String   @map("collection_id") @db.Uuid
+  resourceId   String   @map("resource_id") @db.Uuid
+  addedAt      DateTime @default(now()) @map("added_at") @db.Timestamptz(6)
+  orderIndex   Int      @default(0) @map("order_index")
 
   // Relations
-  collection   Collection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
-  resource     Resource   @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+  collection Collection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  resource   Resource   @relation(fields: [resourceId], references: [id], onDelete: Cascade)
 
   @@unique([collectionId, resourceId])
   @@index([collectionId], map: "idx_collection_resources_collection_id")
@@ -358,27 +408,27 @@ model CollectionResource {
 }
 
 model ResourceVersion {
-  id            String    @id @default(uuid()) @db.Uuid
-  resourceId    String    @map("resource_id") @db.Uuid
-  versionNumber Int       @map("version_number")
-  title         String    @db.VarChar(500)
-  description   String    @db.Text
+  id            String   @id @default(uuid()) @db.Uuid
+  resourceId    String   @map("resource_id") @db.Uuid
+  versionNumber Int      @map("version_number")
+  title         String   @db.VarChar(500)
+  description   String   @db.Text
   category      String?
   tags          String[]
-  githubUrl     String?   @map("github_url") @db.Text
-  externalUrl   String?   @map("external_url") @db.Text
+  githubUrl     String?  @map("github_url") @db.Text
+  externalUrl   String?  @map("external_url") @db.Text
   language      String?
-  readme        String?   @db.Text
-  filePath      String?   @map("file_path") @db.Text
-  fileUrl       String?   @map("file_url") @db.Text
-  fileSize      String?   @map("file_size")
-  createdBy     String    @map("created_by") @db.Uuid
-  changeSummary String?   @map("change_summary") @db.Text
-  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  readme        String?  @db.Text
+  filePath      String?  @map("file_path") @db.Text
+  fileUrl       String?  @map("file_url") @db.Text
+  fileSize      String?  @map("file_size")
+  createdBy     String   @map("created_by") @db.Uuid
+  changeSummary String?  @map("change_summary") @db.Text
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
   // Relations
-  resource   Resource  @relation(fields: [resourceId], references: [id], onDelete: Cascade)
-  creator    Profile   @relation(fields: [createdBy], references: [userId], onDelete: Cascade)
+  resource Resource @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+  creator  Profile  @relation(fields: [createdBy], references: [userId], onDelete: Cascade)
 
   @@unique([resourceId, versionNumber])
   @@index([resourceId], map: "idx_resource_versions_resource_id")
@@ -388,19 +438,19 @@ model ResourceVersion {
 }
 
 model CategoryHierarchy {
-  id          String    @id @default(uuid()) @db.Uuid
+  id          String   @id @default(uuid()) @db.Uuid
   name        String
-  parentId    String?   @map("parent_id") @db.Uuid
-  description String?   @db.Text
-  orderIndex  Int       @default(0) @map("order_index")
-  isActive    Boolean   @default(true) @map("is_active")
-  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  parentId    String?  @map("parent_id") @db.Uuid
+  description String?  @db.Text
+  orderIndex  Int      @default(0) @map("order_index")
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   // Relations
-  parent    CategoryHierarchy?  @relation("CategoryParent", fields: [parentId], references: [id], onDelete: Cascade)
-  children  CategoryHierarchy[] @relation("CategoryParent")
-  filters   CategoryFilter[]
+  parent   CategoryHierarchy?  @relation("CategoryParent", fields: [parentId], references: [id], onDelete: Cascade)
+  children CategoryHierarchy[] @relation("CategoryParent")
+  filters  CategoryFilter[]
 
   @@index([parentId], map: "idx_category_hierarchy_parent_id")
   @@index([isActive], map: "idx_category_hierarchy_is_active")
@@ -408,22 +458,85 @@ model CategoryHierarchy {
 }
 
 model CategoryFilter {
-  id           String    @id @default(uuid()) @db.Uuid
-  categoryId   String    @map("category_id") @db.Uuid
-  filterKey    String    @map("filter_key")
-  filterType   String    @map("filter_type")
-  filterLabel  String    @map("filter_label")
+  id            String   @id @default(uuid()) @db.Uuid
+  categoryId    String   @map("category_id") @db.Uuid
+  filterKey     String   @map("filter_key")
+  filterType    String   @map("filter_type")
+  filterLabel   String   @map("filter_label")
   filterOptions String[] @map("filter_options")
-  isRequired   Boolean   @default(false) @map("is_required")
-  orderIndex   Int       @default(0) @map("order_index")
-  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  isRequired    Boolean  @default(false) @map("is_required")
+  orderIndex    Int      @default(0) @map("order_index")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   // Relations
-  category   CategoryHierarchy @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  category CategoryHierarchy @relation(fields: [categoryId], references: [id], onDelete: Cascade)
 
   @@index([categoryId], map: "idx_category_filters_category_id")
   @@map("category_filters")
+}
+
+model AnalyticsEvent {
+  id         String   @id @default(uuid()) @db.Uuid
+  event      String
+  userId     String?  @map("user_id") @db.Uuid
+  resourceId String?  @map("resource_id") @db.Uuid
+  metadata   Json?    @db.JsonB
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  // Relations
+  user     Profile?  @relation(fields: [userId], references: [userId], onDelete: SetNull)
+  resource Resource? @relation(fields: [resourceId], references: [id], onDelete: SetNull)
+
+  @@index([event], map: "idx_analytics_events_event")
+  @@index([userId], map: "idx_analytics_events_user_id")
+  @@index([resourceId], map: "idx_analytics_events_resource_id")
+  @@index([createdAt], map: "idx_analytics_events_created_at")
+  @@index([event, createdAt], map: "idx_analytics_events_event_created")
+  @@map("analytics_events")
+}
+
+model ApiToken {
+  id         String    @id @default(uuid()) @db.Uuid
+  userId     String    @map("user_id") @db.Uuid
+  token      String    @unique
+  name       String
+  lastUsedAt DateTime? @map("last_used_at") @db.Timestamptz(6)
+  expiresAt  DateTime? @map("expires_at") @db.Timestamptz(6)
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  // Relations
+  user Profile @relation(fields: [userId], references: [userId], onDelete: Cascade)
+
+  @@index([userId], map: "idx_api_tokens_user_id")
+  @@index([token], map: "idx_api_tokens_token")
+  @@index([expiresAt], map: "idx_api_tokens_expires_at")
+  @@map("api_tokens")
+}
+
+model OAuthAccount {
+  id             String    @id @default(uuid()) @db.Uuid
+  userId         String    @map("user_id") @db.Uuid
+  provider       String // 'github' | 'google'
+  providerUserId String    @map("provider_user_id")
+  providerEmail  String?   @map("provider_email")
+  accessToken    String    @map("access_token") @db.Text
+  refreshToken   String?   @map("refresh_token") @db.Text
+  tokenExpiresAt DateTime? @map("token_expires_at") @db.Timestamptz(6)
+  scope          String[]  @db.Text
+  metadata       Json?     @db.JsonB
+  isPrimary      Boolean   @default(false) @map("is_primary")
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // Relations
+  profile Profile @relation(fields: [userId], references: [userId], onDelete: Cascade)
+
+  @@unique([userId, provider, providerUserId], map: "oauth_accounts_user_id_provider_provider_user_id_key")
+  @@index([userId], map: "idx_oauth_accounts_user_id")
+  @@index([provider], map: "idx_oauth_accounts_provider")
+  @@index([provider, providerUserId], map: "idx_oauth_accounts_provider_user_id")
+  @@map("oauth_accounts")
 }
 
 // =============================================================================
@@ -431,8 +544,13 @@ model CategoryFilter {
 // =============================================================================
 
 enum AppRole {
+  super_admin
   admin
+  moderator
   user
+  guest
+
+  @@map("app_role")
 }
 
 enum ResourceType {
@@ -472,7 +590,73 @@ enum PermissionType {
 }
 
 enum GroupRole {
+  owner
   admin
   member
+
+  @@map("group_role")
 }
 
+// =============================================================================
+// MODÈLES DE PERMISSIONS
+// =============================================================================
+
+// Modèle pour les permissions granulaires
+// Chaque permission définit une action sur une ressource
+model Permission {
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String   @unique // Format: "resource:action" (ex: "resource:read")
+  resource    String // Type de ressource: 'resource', 'template', 'suggestion', 'admin', etc.
+  action      String // Action: 'read', 'write', 'delete', 'share', 'approve', etc.
+  description String?  @db.Text
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // Relations
+  rolePermissions RolePermission[]
+  auditLogs       PermissionAuditLog[]
+
+  @@index([resource], map: "idx_permissions_resource")
+  @@index([action], map: "idx_permissions_action")
+  @@index([resource, action], map: "idx_permissions_resource_action")
+  @@map("permissions")
+}
+
+// Lien entre les rôles et les permissions
+// Définit quelles permissions sont accordées à chaque rôle
+model RolePermission {
+  id           String   @id @default(uuid()) @db.Uuid
+  role         AppRole // Rôle qui a cette permission
+  permissionId String   @map("permission_id") @db.Uuid
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  // Relations
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@unique([role, permissionId], map: "idx_role_permissions_unique")
+  @@index([role], map: "idx_role_permissions_role")
+  @@index([permissionId], map: "idx_role_permissions_permission")
+  @@map("role_permissions")
+}
+
+// Historique des actions liées aux permissions et rôles
+model PermissionAuditLog {
+  id             String    @id @default(uuid()) @db.Uuid
+  actorUserId    String?   @map("actor_user_id") @db.Uuid
+  action         String
+  targetRole     AppRole?  @map("target_role")
+  permissionId   String?   @map("permission_id") @db.Uuid
+  permissionName String?   @map("permission_name")
+  metadata       Json?     @db.Json
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  // Relations
+  permission Permission? @relation(fields: [permissionId], references: [id], onDelete: SetNull)
+  actor      Profile?    @relation("PermissionAuditActor", fields: [actorUserId], references: [userId], onDelete: SetNull)
+
+  @@index([actorUserId], map: "idx_permission_audit_actor")
+  @@index([action], map: "idx_permission_audit_action")
+  @@index([targetRole], map: "idx_permission_audit_role")
+  @@index([createdAt], map: "idx_permission_audit_created_at")
+  @@map("permission_audit_logs")
+}

@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, type FormEvent } from "react";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { Button } from "@/components/ui/button";
@@ -8,9 +8,10 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { 
-  CheckCircle2, 
-  XCircle, 
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import {
+  CheckCircle2,
+  XCircle,
   Shield,
   TrendingUp,
   FolderTree,
@@ -25,19 +26,27 @@ import {
   Settings,
   Clock,
   Filter,
+  Users,
+  ShieldCheck,
+  History,
+  Download,
 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { localClient } from "@/integrations/local/client";
 import { useToast } from "@/hooks/use-toast";
-import { useUserRole } from "@/hooks/useUserRole";
+import { useIsAdmin, useIsSuperAdmin, usePermissions } from "@/hooks/usePermissions";
 import { useNavigate } from "react-router-dom";
 import { useSuggestionVoting } from "@/hooks/useSuggestionVoting";
 import { useAuth } from "@/hooks/useAuth";
 import { AdminConfigPanel } from "@/components/AdminConfigPanel";
 import { VoteButtons } from "@/components/VoteButtons";
 import { adminConfigService } from "@/services/adminConfigService";
+import { userManagementService, type User } from "@/services/userManagementService";
+import { logger } from "@/lib/logger";
+import { adminPermissionsService, type PermissionAuditAction } from "@/services/adminPermissionsService";
+import type { AppRole } from "@/types/permissions";
 
-type SuggestionType = "category" | "tag" | "resource_type" | "filter" | "resources";
+type SuggestionType = "category" | "tag" | "resource_type" | "filter" | "resources" | "users";
 type SuggestionStatus = "pending" | "approved" | "rejected";
 
 interface Suggestion {
@@ -56,18 +65,34 @@ interface Suggestion {
   } | null;
 }
 
+type AdminTab = SuggestionType | "config" | "permissions" | "audit";
+
 export default function AdminPanel() {
-  const { isAdmin, loading: roleLoading } = useUserRole();
+  const isAdmin = useIsAdmin();
+  const isSuperAdmin = useIsSuperAdmin();
+  const canAccessAdmin = isAdmin || isSuperAdmin;
+  const { loading: roleLoading } = usePermissions();
   const { toast } = useToast();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [activeTab, setActiveTab] = useState<SuggestionType | "config">("category");
+  const [activeTab, setActiveTab] = useState<AdminTab>("category");
+  const [usersPage, setUsersPage] = useState(1);
+  const [usersSearch, setUsersSearch] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<SuggestionStatus | "all">("all");
   const [editingItem, setEditingItem] = useState<{ type: "category" | "tag"; name: string; newName: string } | null>(null);
   const [editingSuggestion, setEditingSuggestion] = useState<{ id: string; name: string; description: string } | null>(null);
   const [showConfigTab, setShowConfigTab] = useState(false);
   const { user } = useAuth();
+  const [permissionSearch, setPermissionSearch] = useState("");
+  const [permissionResourceFilter, setPermissionResourceFilter] = useState<string>("all");
+  const [permissionRoleFilter, setPermissionRoleFilter] = useState<AppRole | "all">("all");
+  const [newPermission, setNewPermission] = useState({ resource: "", action: "", description: "" });
+  const [permissionAssignSelections, setPermissionAssignSelections] = useState<Record<string, AppRole | "">>({});
+  const [auditPage, setAuditPage] = useState(1);
+  const [auditActionFilter, setAuditActionFilter] = useState<PermissionAuditAction | "all">("all");
+  const [auditRoleFilter, setAuditRoleFilter] = useState<AppRole | "all">("all");
+  const [auditActorFilter, setAuditActorFilter] = useState("");
 
   // Fetch existing categories and tags
   const { data: existingCategories, isLoading: loadingCategories } = useQuery({
@@ -93,14 +118,14 @@ export default function AdminPanel() {
       }, {});
 
       return Object.entries(categoryCounts)
-        .map(([name, counts]) => ({
+        .map(([name, counts]: [string, { total: number; public: number }]) => ({
           name,
           total: counts.total,
           public: counts.public,
         }))
         .sort((a, b) => b.total - a.total);
     },
-    enabled: isAdmin && !roleLoading,
+    enabled: canAccessAdmin && !roleLoading,
   });
 
   const { data: existingTags, isLoading: loadingTags } = useQuery({
@@ -130,14 +155,14 @@ export default function AdminPanel() {
       }, {});
 
       return Object.entries(tagCounts)
-        .map(([name, counts]) => ({
+        .map(([name, counts]: [string, { total: number; public: number }]) => ({
           name,
           total: counts.total,
           public: counts.public,
         }))
         .sort((a, b) => b.total - a.total);
     },
-    enabled: isAdmin && !roleLoading,
+    enabled: canAccessAdmin && !roleLoading,
   });
 
   // Fetch existing resource types
@@ -166,14 +191,14 @@ export default function AdminPanel() {
       }, {});
 
       return Object.entries(typeCounts)
-        .map(([name, counts]) => ({
+        .map(([name, counts]: [string, { total: number; public: number }]) => ({
           name,
           total: counts.total,
           public: counts.public,
         }))
         .sort((a, b) => b.total - a.total);
     },
-    enabled: isAdmin && !roleLoading,
+    enabled: canAccessAdmin && !roleLoading,
   });
 
   // Fetch public resources for admin management
@@ -193,7 +218,7 @@ export default function AdminPanel() {
           .eq("visibility", "public")
           .execute();
 
-        const filtered = allResources?.filter((r: any) => {
+        const filtered = allResources?.filter((r) => {
           const searchLower = searchQuery.toLowerCase();
           return (
             r.title.toLowerCase().includes(searchLower) ||
@@ -208,24 +233,34 @@ export default function AdminPanel() {
 
       const { data, error } = await query.execute();
       if (error) throw error;
-      return data || [];
+      return (data || []) as Array<{
+        total: number;
+        public: number;
+      }>;
     },
-    enabled: isAdmin && !roleLoading && activeTab === "resources",
+    enabled: canAccessAdmin && !roleLoading && activeTab === "resources",
   });
 
   // Delete resource mutation
   const deleteResourceMutation = useMutation({
     mutationFn: async (resourceId: string) => {
       // Supprimer les relations
-      await localClient.from("saved_resources").delete().eq("resource_id", resourceId).execute();
-      await localClient.from("resource_ratings").delete().eq("resource_id", resourceId).execute();
-      await localClient.from("resource_shares").delete().eq("resource_id", resourceId).execute();
-      await localClient.from("resource_comments").delete().eq("resource_id", resourceId).execute();
+      const savedResResult = await (localClient.from("saved_resources").delete() as any).eq("resource_id", resourceId).execute();
+      if (savedResResult.error) throw savedResResult.error;
+      
+      const ratingsResult = await (localClient.from("resource_ratings").delete() as any).eq("resource_id", resourceId).execute();
+      if (ratingsResult.error) throw ratingsResult.error;
+      
+      const sharesResult = await (localClient.from("resource_shares").delete() as any).eq("resource_id", resourceId).execute();
+      if (sharesResult.error) throw sharesResult.error;
+      
+      const commentsResult = await (localClient.from("resource_comments").delete() as any).eq("resource_id", resourceId).execute();
+      if (commentsResult.error) throw commentsResult.error;
       
       // Supprimer la ressource
-      const { error } = await localClient
+      const { error } = await (localClient
         .from("resources")
-        .delete()
+        .delete() as any)
         .eq("id", resourceId)
         .execute();
 
@@ -266,21 +301,21 @@ export default function AdminPanel() {
         .execute();
 
       if (error) {
-        console.error("Erreur lors de la récupération des suggestions:", error);
+        logger.error("Erreur lors de la récupération des suggestions", undefined, error instanceof Error ? error : new Error(String(error)));
         throw error;
       }
 
       // Si aucune donnée, retourner un tableau vide
       if (!data || data.length === 0) {
-        console.log(`Aucune suggestion trouvée pour le type: ${activeTab}`);
+        logger.debug(`Aucune suggestion trouvée pour le type: ${activeTab}`);
         return [];
       }
 
-      console.log(`Récupération de ${data.length} suggestions pour le type: ${activeTab}`);
+      logger.debug(`Récupération de ${data.length} suggestions pour le type: ${activeTab}`);
 
       // Fetch profiles separately for each suggestion
       const suggestionsWithProfiles = await Promise.all(
-        (data || []).map(async (suggestion: any) => {
+        (data || []).map(async (suggestion) => {
           // Récupérer les votes pour chaque suggestion
           const { data: votes } = await localClient
             .from("suggestion_votes")
@@ -289,13 +324,13 @@ export default function AdminPanel() {
             .execute();
           
           // Calculer les upvotes, downvotes et le score
-          const upvotes = (votes || []).filter((v: any) => v.vote_type === "upvote").length;
-          const downvotes = (votes || []).filter((v: any) => v.vote_type === "downvote").length;
+          const upvotes = (votes || []).filter((v) => v.vote_type === "upvote").length;
+          const downvotes = (votes || []).filter((v) => v.vote_type === "downvote").length;
           const score = upvotes - downvotes;
           
           // Trouver le vote de l'utilisateur actuel
           const userVote = user && votes
-            ? votes.find((v: any) => v.user_id === user.id)
+            ? votes.find((v) => v.user_id === user.id)
             : null;
 
           let profileData = null;
@@ -326,7 +361,7 @@ export default function AdminPanel() {
       );
 
       // Trier : pending d'abord, puis approved, puis rejected, puis par votes_count
-      const sorted = suggestionsWithProfiles.sort((a: any, b: any) => {
+      const sorted = suggestionsWithProfiles.sort((a, b) => {
         const statusOrder = { pending: 0, approved: 1, rejected: 2 };
         const statusDiff = statusOrder[a.status as keyof typeof statusOrder] - statusOrder[b.status as keyof typeof statusOrder];
         if (statusDiff !== 0) return statusDiff;
@@ -335,7 +370,7 @@ export default function AdminPanel() {
 
       return sorted as (Suggestion & { user_votes: any[] })[];
     },
-    enabled: isAdmin && !roleLoading && activeTab !== "resources",
+    enabled: canAccessAdmin && !roleLoading && activeTab !== "resources",
   });
 
   // Filtrer les suggestions par statut
@@ -346,20 +381,21 @@ export default function AdminPanel() {
       return suggestions;
     }
     
-    return suggestions.filter((s: any) => s.status === statusFilter);
+    return suggestions.filter((s) => s.status === statusFilter);
   }, [suggestions, statusFilter]);
 
   // Mutation pour éditer une suggestion
   const editSuggestionMutation = useMutation({
     mutationFn: async ({ id, name, description }: { id: string; name: string; description: string }) => {
-      const { error } = await localClient
+      const { error } = await (localClient
         .from("category_tag_suggestions")
         .update({ 
           name,
           description,
           updated_at: new Date().toISOString(),
-        })
-        .eq("id", id);
+        }) as any)
+        .eq("id", id)
+        .execute();
 
       if (error) throw error;
     },
@@ -385,16 +421,17 @@ export default function AdminPanel() {
   const deleteSuggestionMutation = useMutation({
     mutationFn: async (id: string) => {
       // Supprimer d'abord les votes associés
-      await localClient
+      const votesResult = await (localClient
         .from("suggestion_votes")
-        .delete()
+        .delete() as any)
         .eq("suggestion_id", id)
         .execute();
+      if (votesResult.error) throw votesResult.error;
 
       // Supprimer la suggestion
-      const { error } = await localClient
+      const { error } = await (localClient
         .from("category_tag_suggestions")
-        .delete()
+        .delete() as any)
         .eq("id", id)
         .execute();
 
@@ -421,14 +458,15 @@ export default function AdminPanel() {
   // Update suggestion status mutation (always call hook)
   const updateStatusMutation = useMutation({
     mutationFn: async ({ id, status }: { id: string; status: "approved" | "rejected" | "pending" }) => {
-      const { error } = await localClient
+      const { error } = await (localClient
         .from("category_tag_suggestions")
         .update({ 
           status,
           reviewed_at: status !== "pending" ? new Date().toISOString() : null,
           reviewed_by: status !== "pending" && user ? user.id : null,
-        })
-        .eq("id", id);
+        }) as any)
+        .eq("id", id)
+        .execute();
 
       if (error) throw error;
     },
@@ -466,10 +504,11 @@ export default function AdminPanel() {
     }) => {
       // Update all resources that use this category/tag
       if (type === "category") {
-        const { error } = await localClient
+        const { error } = await (localClient
           .from("resources")
-          .update({ category: newName })
-          .eq("category", oldName);
+          .update({ category: newName }) as any)
+          .eq("category", oldName)
+          .execute();
         
         if (error) throw error;
       } else {
@@ -481,15 +520,16 @@ export default function AdminPanel() {
         
         if (resources) {
           const updates = resources
-            .filter((r: any) => r.tags && r.tags.includes(oldName))
-            .map(async (r: any) => {
+            .filter((r) => r.tags && r.tags.includes(oldName))
+            .map(async (r) => {
               const updatedTags = r.tags.map((tag: string) => 
                 tag === oldName ? newName : tag
               );
-              const { error } = await localClient
+              const { error } = await (localClient
                 .from("resources")
-                .update({ tags: updatedTags })
-                .eq("id", r.id);
+                .update({ tags: updatedTags }) as any)
+                .eq("id", r.id)
+                .execute();
               
               if (error) throw error;
             });
@@ -508,7 +548,7 @@ export default function AdminPanel() {
         description: "Le nom a été mis à jour avec succès.",
       });
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       toast({
         title: "Erreur",
         description: error.message || "Impossible de modifier le nom.",
@@ -516,6 +556,217 @@ export default function AdminPanel() {
       });
     },
   });
+
+  // Users management queries and mutations
+  const { data: usersData, isLoading: loadingUsers } = useQuery({
+    queryKey: ["admin-users", usersPage, usersSearch],
+    queryFn: async () => {
+      return await userManagementService.getUsers(usersPage, 20, usersSearch || undefined);
+    },
+    enabled: canAccessAdmin && !roleLoading && activeTab === "users",
+  });
+
+  const updateUserRoleMutation = useMutation({
+    mutationFn: async ({ userId, role }: { userId: string; role: 'admin' | 'user' }) => {
+      await userManagementService.updateUserRole(userId, role);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-users"] });
+      toast({
+        title: "Rôle mis à jour",
+        description: "Le rôle de l'utilisateur a été mis à jour avec succès.",
+      });
+    },
+    onError: (error: unknown) => {
+      toast({
+        title: "Erreur",
+        description: error.message || "Impossible de mettre à jour le rôle.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const { data: permissionEntries, isLoading: loadingPermissionEntries } = useQuery({
+    queryKey: ["admin-permissions"],
+    queryFn: adminPermissionsService.listPermissions,
+    enabled: canAccessAdmin && !roleLoading,
+  });
+
+  const auditLogsEnabled = isSuperAdmin && activeTab === "audit";
+  const { data: auditLogs, isLoading: loadingAuditLogs } = useQuery({
+    queryKey: ["permission-audit", auditPage, auditActionFilter, auditRoleFilter, auditActorFilter],
+    queryFn: () =>
+      adminPermissionsService.listAuditLogs({
+        page: auditPage,
+        action: auditActionFilter === "all" ? undefined : (auditActionFilter as PermissionAuditAction),
+        targetRole: auditRoleFilter === "all" ? undefined : auditRoleFilter,
+        actorUserId: auditActorFilter || undefined,
+      }),
+    enabled: auditLogsEnabled,
+  });
+
+  const allRoles: AppRole[] = ["super_admin", "admin", "moderator", "user", "guest"];
+
+  const permissionResources = useMemo(() => {
+    if (!permissionEntries) return [];
+    return Array.from(new Set(permissionEntries.map((permission) => permission.resource))).sort();
+  }, [permissionEntries]);
+
+  const filteredPermissions = useMemo(() => {
+    if (!permissionEntries) return [];
+
+    return permissionEntries.filter((permission) => {
+      const search = permissionSearch.trim().toLowerCase();
+      const matchesSearch =
+        search.length === 0 ||
+        permission.name.toLowerCase().includes(search) ||
+        permission.resource.toLowerCase().includes(search) ||
+        permission.action.toLowerCase().includes(search) ||
+        (permission.description ?? "").toLowerCase().includes(search);
+
+      const matchesResource =
+        permissionResourceFilter === "all" || permission.resource === permissionResourceFilter;
+
+      const matchesRole =
+        permissionRoleFilter === "all" ||
+        permission.roles.some((assignment) => assignment.role === permissionRoleFilter);
+
+      return matchesSearch && matchesResource && matchesRole;
+    });
+  }, [permissionEntries, permissionSearch, permissionResourceFilter, permissionRoleFilter]);
+
+  useEffect(() => {
+    setAuditPage(1);
+  }, [auditActionFilter, auditRoleFilter, auditActorFilter]);
+
+  const createPermissionMutation = useMutation({
+    mutationFn: adminPermissionsService.createPermission,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-permissions"] });
+      setNewPermission({ resource: "", action: "", description: "" });
+      toast({
+        title: "Permission créée",
+        description: "La permission a été ajoutée avec succès.",
+      });
+    },
+    onError: (error: unknown) => {
+      toast({
+        title: "Erreur",
+        description: error.message || "Impossible de créer la permission.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const assignPermissionMutation = useMutation({
+    mutationFn: adminPermissionsService.assignPermission,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-permissions"] });
+      toast({
+        title: "Permission assignée",
+        description: "La permission a été assignée au rôle.",
+      });
+    },
+    onError: (error: unknown) => {
+      toast({
+        title: "Erreur",
+        description: error.message || "Impossible d'assigner la permission.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const revokePermissionMutation = useMutation({
+    mutationFn: adminPermissionsService.revokePermission,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-permissions"] });
+      toast({
+        title: "Permission retirée",
+        description: "La permission a été retirée du rôle.",
+      });
+    },
+    onError: (error: unknown) => {
+      toast({
+        title: "Erreur",
+        description: error.message || "Impossible de retirer la permission.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleCreatePermission = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!newPermission.resource.trim() || !newPermission.action.trim()) {
+      toast({
+        title: "Champs requis",
+        description: "Veuillez renseigner la ressource et l'action.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    createPermissionMutation.mutate({
+      resource: newPermission.resource.trim(),
+      action: newPermission.action.trim(),
+      description: newPermission.description.trim() || undefined,
+    });
+  };
+
+  const handleAssignRole = (permissionId: string, role: AppRole) => {
+    assignPermissionMutation.mutate(
+      { role, permissionId },
+      {
+        onSettled: () =>
+          setPermissionAssignSelections((prev) => ({ ...prev, [permissionId]: "" })),
+      }
+    );
+  };
+
+  const handleRevokeRole = (rolePermissionId: string) => {
+    revokePermissionMutation.mutate(rolePermissionId);
+  };
+
+  const handleExportAudit = () => {
+    if (!auditLogs?.data || auditLogs.data.length === 0) {
+      toast({
+        title: "Aucune donnée",
+        description: "Il n'y a aucun événement à exporter pour le moment.",
+      });
+      return;
+    }
+
+    const rows = auditLogs.data.map((log) => ({
+      date: new Date(log.createdAt).toISOString(),
+      action: log.action,
+      permission: log.permissionName || log.permission?.name || "",
+      resource: log.permission?.resource || "",
+      targetRole: log.targetRole || "",
+      actor: log.actor?.username || log.actor?.email || "Système",
+    }));
+
+    const headers = ["date", "action", "permission", "resource", "targetRole", "actor"];
+    const csv = [
+      headers.join(","),
+      ...rows.map((row) =>
+        headers
+          .map((header) => {
+            const value = String(row[header as keyof typeof row] ?? "");
+            return `"${value.replace(/"/g, '""')}"`;
+          })
+          .join(",")
+      ),
+    ].join("\n");
+
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.setAttribute("download", `permission-audit-${new Date().toISOString()}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
 
   // Delete category/tag mutation
   const deleteCategoryTagMutation = useMutation({
@@ -526,7 +777,8 @@ export default function AdminPanel() {
           .from("resources")
           .select("id")
           .eq("category", name)
-          .limit(1);
+          .limit(1)
+          .execute();
         
         if (resources && resources.length > 0) {
           throw new Error("Impossible de supprimer une catégorie utilisée par des ressources. Modifiez d'abord les ressources.");
@@ -538,7 +790,7 @@ export default function AdminPanel() {
           .select("id, tags")
           .execute();
         
-        const hasResources = resources?.some((r: any) => 
+        const hasResources = resources?.some((r) => 
           r.tags && r.tags.includes(name)
         );
         
@@ -555,7 +807,7 @@ export default function AdminPanel() {
         description: "L'élément a été supprimé avec succès.",
       });
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       toast({
         title: "Erreur",
         description: error.message || "Impossible de supprimer l'élément.",
@@ -570,6 +822,11 @@ export default function AdminPanel() {
         <p className="text-muted-foreground">Chargement...</p>
       </div>
     );
+  }
+
+  if (!canAccessAdmin) {
+    navigate("/");
+    return null;
   }
 
   return (
@@ -593,34 +850,34 @@ export default function AdminPanel() {
           </div>
 
           {/* Tabs */}
-          <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as SuggestionType | "config")} className="space-y-8">
-            <TabsList className="grid w-full sm:w-auto grid-cols-6">
+          <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as AdminTab)} className="space-y-8">
+            <TabsList className="grid w-full sm:w-auto grid-cols-9 gap-2">
               <TabsTrigger value="category" className="gap-2">
                 <FolderTree className="h-4 w-4" />
                 Catégories
                 {suggestions && suggestions.length > 0 && (
-                  <Badge variant="secondary">{suggestions.filter((s: any) => s.status === "pending").length}</Badge>
+                  <Badge variant="secondary">{suggestions.filter((s) => s.status === "pending").length}</Badge>
                 )}
               </TabsTrigger>
               <TabsTrigger value="tag" className="gap-2">
                 <Tag className="h-4 w-4" />
                 Tags
                 {suggestions && suggestions.length > 0 && (
-                  <Badge variant="secondary">{suggestions.filter((s: any) => s.status === "pending").length}</Badge>
+                  <Badge variant="secondary">{suggestions.filter((s) => s.status === "pending").length}</Badge>
                 )}
               </TabsTrigger>
               <TabsTrigger value="resource_type" className="gap-2">
                 <FileText className="h-4 w-4" />
                 Types
                 {suggestions && suggestions.length > 0 && (
-                  <Badge variant="secondary">{suggestions.filter((s: any) => s.status === "pending").length}</Badge>
+                  <Badge variant="secondary">{suggestions.filter((s) => s.status === "pending").length}</Badge>
                 )}
               </TabsTrigger>
               <TabsTrigger value="filter" className="gap-2">
                 <Tag className="h-4 w-4" />
                 Filtres
                 {suggestions && suggestions.length > 0 && (
-                  <Badge variant="secondary">{suggestions.filter((s: any) => s.status === "pending").length}</Badge>
+                  <Badge variant="secondary">{suggestions.filter((s) => s.status === "pending").length}</Badge>
                 )}
               </TabsTrigger>
               <TabsTrigger value="resources" className="gap-2">
@@ -630,6 +887,22 @@ export default function AdminPanel() {
                   <Badge variant="secondary">{publicResources.length}</Badge>
                 )}
               </TabsTrigger>
+              <TabsTrigger value="users" className="gap-2">
+                <Users className="h-4 w-4" />
+                Utilisateurs
+              </TabsTrigger>
+              {canAccessAdmin && (
+                <TabsTrigger value="permissions" className="gap-2">
+                  <ShieldCheck className="h-4 w-4" />
+                  Permissions
+                </TabsTrigger>
+              )}
+              {isSuperAdmin && (
+                <TabsTrigger value="audit" className="gap-2">
+                  <History className="h-4 w-4" />
+                  Audit
+                </TabsTrigger>
+              )}
               <TabsTrigger value="config" className="gap-2">
                 <Settings className="h-4 w-4" />
                 Config
@@ -1100,6 +1373,449 @@ export default function AdminPanel() {
               </TabsContent>
             )}
 
+            {/* Users Tab */}
+            <TabsContent value="users" className="space-y-6">
+              <div>
+                <h2 className="text-2xl font-bold mb-2">Gestion des utilisateurs</h2>
+                <p className="text-muted-foreground">
+                  Gérez les rôles et les permissions des utilisateurs
+                </p>
+              </div>
+
+              {/* Search */}
+              <div className="flex gap-4">
+                <Input
+                  placeholder="Rechercher un utilisateur..."
+                  value={usersSearch}
+                  onChange={(e) => {
+                    setUsersSearch(e.target.value);
+                    setUsersPage(1);
+                  }}
+                  className="max-w-sm"
+                />
+              </div>
+
+              {/* Users List */}
+              {loadingUsers ? (
+                <div className="text-center py-8 text-muted-foreground">Chargement...</div>
+              ) : usersData && usersData.data.length > 0 ? (
+                <div className="space-y-4">
+                  <div className="grid gap-4">
+                    {usersData.data.map((user: User) => (
+                      <Card key={user.userId} className="p-4">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-4 flex-1">
+                            <Avatar className="h-10 w-10">
+                              <AvatarImage src={user.avatarUrl || undefined} />
+                              <AvatarFallback>
+                                {user.username?.charAt(0).toUpperCase() || user.email.charAt(0).toUpperCase()}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2">
+                                <h3 className="font-semibold">
+                                  {user.fullName || user.username || user.email}
+                                </h3>
+                                <Badge variant={user.role === 'admin' ? 'default' : 'secondary'}>
+                                  {user.role}
+                                </Badge>
+                              </div>
+                              <p className="text-sm text-muted-foreground">{user.email}</p>
+                              <div className="flex gap-4 mt-1 text-xs text-muted-foreground">
+                                <span>{user.resourcesCount} ressources</span>
+                                <span>{user.collectionsCount} collections</span>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Select
+                              value={user.role}
+                              onValueChange={(value: 'admin' | 'user') => {
+                                updateUserRoleMutation.mutate({
+                                  userId: user.userId,
+                                  role: value,
+                                });
+                              }}
+                              disabled={updateUserRoleMutation.isPending}
+                            >
+                              <SelectTrigger className="w-32">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="user">Utilisateur</SelectItem>
+                                <SelectItem value="admin">Admin</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+                      </Card>
+                    ))}
+                  </div>
+
+                  {/* Pagination */}
+                  {usersData.meta.totalPages > 1 && (
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm text-muted-foreground">
+                        Page {usersData.meta.page} sur {usersData.meta.totalPages} ({usersData.meta.total} utilisateurs)
+                      </p>
+                      <div className="flex gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setUsersPage((p) => Math.max(1, p - 1))}
+                          disabled={usersPage === 1}
+                        >
+                          Précédent
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setUsersPage((p) => Math.min(usersData.meta.totalPages, p + 1))}
+                          disabled={usersPage === usersData.meta.totalPages}
+                        >
+                          Suivant
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="text-center py-12 space-y-4">
+                  <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-muted">
+                    <Users className="h-8 w-8 text-muted-foreground" />
+                  </div>
+                  <div className="space-y-2">
+                    <h3 className="text-xl font-semibold">Aucun utilisateur trouvé</h3>
+                    <p className="text-muted-foreground">
+                      {usersSearch ? "Aucun utilisateur ne correspond à votre recherche." : "Aucun utilisateur dans le système."}
+                    </p>
+                  </div>
+                </div>
+              )}
+            </TabsContent>
+
+            {/* Permissions Tab */}
+            {canAccessAdmin && (
+              <TabsContent value="permissions" className="space-y-6">
+                <div>
+                  <h2 className="text-2xl font-bold mb-2">Permissions granulaires</h2>
+                  <p className="text-muted-foreground">
+                    Créez de nouvelles permissions et assignez-les aux rôles pour contrôler précisément l’accès aux
+                    fonctionnalités.
+                  </p>
+                </div>
+
+                {isSuperAdmin && (
+                  <Card className="p-6">
+                    <form className="grid gap-4 md:grid-cols-4" onSubmit={handleCreatePermission}>
+                      <div className="space-y-2">
+                        <p className="text-sm font-medium">Ressource</p>
+                        <Input
+                          placeholder="resource"
+                          value={newPermission.resource}
+                          onChange={(e) => setNewPermission((prev) => ({ ...prev, resource: e.target.value }))}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <p className="text-sm font-medium">Action</p>
+                        <Input
+                          placeholder="create / read / update..."
+                          value={newPermission.action}
+                          onChange={(e) => setNewPermission((prev) => ({ ...prev, action: e.target.value }))}
+                        />
+                      </div>
+                      <div className="space-y-2 md:col-span-1">
+                        <p className="text-sm font-medium">Description</p>
+                        <Input
+                          placeholder="Optionnel"
+                          value={newPermission.description}
+                          onChange={(e) =>
+                            setNewPermission((prev) => ({
+                              ...prev,
+                              description: e.target.value,
+                            }))
+                          }
+                        />
+                      </div>
+                      <div className="flex items-end">
+                        <Button type="submit" className="w-full" disabled={createPermissionMutation.isPending}>
+                          {createPermissionMutation.isPending ? "Création..." : "Créer la permission"}
+                        </Button>
+                      </div>
+                    </form>
+                  </Card>
+                )}
+
+                <Card className="p-6 space-y-4">
+                  <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                    <Input
+                      placeholder="Rechercher une permission..."
+                      value={permissionSearch}
+                      onChange={(e) => setPermissionSearch(e.target.value)}
+                      className="max-w-md"
+                    />
+                    <div className="flex flex-col gap-3 md:flex-row">
+                      <Select value={permissionResourceFilter} onValueChange={setPermissionResourceFilter}>
+                        <SelectTrigger className="w-48">
+                          <SelectValue placeholder="Ressource" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">Toutes les ressources</SelectItem>
+                          {permissionResources.map((resource) => (
+                            <SelectItem key={resource} value={resource}>
+                              {resource}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Select
+                        value={permissionRoleFilter}
+                        onValueChange={(value) =>
+                          setPermissionRoleFilter(value as AppRole | "all")
+                        }
+                      >
+                        <SelectTrigger className="w-48">
+                          <SelectValue placeholder="Rôle" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">Tous les rôles</SelectItem>
+                          {allRoles.map((role) => (
+                            <SelectItem key={role} value={role}>
+                              {role}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                </Card>
+
+                {loadingPermissionEntries ? (
+                  <div className="text-center py-12 text-muted-foreground">Chargement des permissions...</div>
+                ) : filteredPermissions.length > 0 ? (
+                  <div className="space-y-4">
+                    {filteredPermissions.map((permission) => {
+                      const availableRoles = allRoles.filter(
+                        (role) => !permission.roles.some((assignment) => assignment.role === role)
+                      );
+
+                      return (
+                        <Card key={permission.id} className="p-6 space-y-4">
+                          <div className="flex flex-wrap items-center justify-between gap-4">
+                            <div>
+                              <h3 className="text-lg font-semibold">{permission.name}</h3>
+                              <p className="text-sm text-muted-foreground">
+                                {permission.description || "Aucune description fournie"}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Badge variant="outline">{permission.resource}</Badge>
+                              <Badge variant="secondary" className="uppercase">
+                                {permission.action}
+                              </Badge>
+                            </div>
+                          </div>
+                          <div className="space-y-2">
+                            <p className="text-sm font-medium">Rôles ayant cette permission</p>
+                            <div className="flex flex-wrap gap-2">
+                              {permission.roles.length > 0 ? (
+                                permission.roles.map((assignment) => (
+                                  <Badge key={assignment.rolePermissionId} variant="secondary" className="flex items-center gap-1">
+                                    {assignment.role}
+                                    {isSuperAdmin && (
+                                      <button
+                                        type="button"
+                                        className="ml-1 text-muted-foreground hover:text-destructive"
+                                        onClick={() => handleRevokeRole(assignment.rolePermissionId)}
+                                        disabled={revokePermissionMutation.isPending}
+                                      >
+                                        <X className="h-3 w-3" />
+                                      </button>
+                                    )}
+                                  </Badge>
+                                ))
+                              ) : (
+                                <span className="text-sm text-muted-foreground">Aucun rôle assigné</span>
+                              )}
+                            </div>
+                          </div>
+                          {isSuperAdmin && availableRoles.length > 0 && (
+                            <div className="flex flex-col gap-2 md:flex-row md:items-center">
+                              <Select
+                                value={permissionAssignSelections[permission.id] ?? ""}
+                                onValueChange={(value) => {
+                                  if (!value) return;
+                                  setPermissionAssignSelections((prev) => ({ ...prev, [permission.id]: value as AppRole }));
+                                  handleAssignRole(permission.id, value as AppRole);
+                                }}
+                                disabled={assignPermissionMutation.isPending}
+                              >
+                                <SelectTrigger className="w-full md:w-64">
+                                  <SelectValue placeholder="Assigner à un rôle" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="" disabled>
+                                    Sélectionner un rôle
+                                  </SelectItem>
+                                  {availableRoles.map((role) => (
+                                    <SelectItem key={role} value={role}>
+                                      {role}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              <p className="text-xs text-muted-foreground">
+                                Choisissez un rôle pour lui accorder cette permission.
+                              </p>
+                            </div>
+                          )}
+                        </Card>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="text-center py-12 space-y-2">
+                    <History className="h-8 w-8 mx-auto text-muted-foreground" />
+                    <p className="text-muted-foreground">Aucune permission ne correspond à vos filtres.</p>
+                  </div>
+                )}
+              </TabsContent>
+            )}
+
+            {/* Audit Tab */}
+            {isSuperAdmin && (
+              <TabsContent value="audit" className="space-y-6">
+                <div>
+                  <h2 className="text-2xl font-bold mb-2">Journal des permissions</h2>
+                  <p className="text-muted-foreground">
+                    Analysez toutes les modifications réalisées sur les rôles et permissions.
+                  </p>
+                </div>
+
+                <Card className="p-6 space-y-4">
+                  <div className="grid gap-4 md:grid-cols-4">
+                    <Select
+                      value={auditActionFilter}
+                      onValueChange={(value) => setAuditActionFilter(value as PermissionAuditAction | "all")}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Action" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Toutes les actions</SelectItem>
+                        <SelectItem value="PERMISSION_CREATED">Création</SelectItem>
+                        <SelectItem value="PERMISSION_ASSIGNED">Assignation</SelectItem>
+                        <SelectItem value="PERMISSION_REVOKED">Révocation</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Select
+                      value={auditRoleFilter}
+                      onValueChange={(value) => setAuditRoleFilter(value as AppRole | "all")}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Rôle cible" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Tous les rôles</SelectItem>
+                        {allRoles.map((role) => (
+                          <SelectItem key={role} value={role}>
+                            {role}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Input
+                      placeholder="ID utilisateur (acteur)"
+                      value={auditActorFilter}
+                      onChange={(e) => setAuditActorFilter(e.target.value)}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="gap-2"
+                      onClick={handleExportAudit}
+                      disabled={loadingAuditLogs}
+                    >
+                      <Download className="h-4 w-4" />
+                      Exporter CSV
+                    </Button>
+                  </div>
+                </Card>
+
+                {loadingAuditLogs ? (
+                  <div className="text-center py-12 text-muted-foreground">Chargement du journal...</div>
+                ) : auditLogs && auditLogs.data.length > 0 ? (
+                  <div className="space-y-4">
+                    <div className="overflow-x-auto border rounded-lg">
+                      <table className="min-w-full text-sm">
+                        <thead className="bg-muted/40 text-muted-foreground">
+                          <tr>
+                            <th className="px-4 py-3 text-left font-medium">Date</th>
+                            <th className="px-4 py-3 text-left font-medium">Action</th>
+                            <th className="px-4 py-3 text-left font-medium">Permission</th>
+                            <th className="px-4 py-3 text-left font-medium">Rôle cible</th>
+                            <th className="px-4 py-3 text-left font-medium">Acteur</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {auditLogs.data.map((log) => (
+                            <tr key={log.id} className="border-t">
+                              <td className="px-4 py-3">
+                                {new Date(log.createdAt).toLocaleString("fr-FR")}
+                              </td>
+                              <td className="px-4 py-3">{log.action}</td>
+                              <td className="px-4 py-3">
+                                {log.permissionName || log.permission?.name || "—"}
+                              </td>
+                              <td className="px-4 py-3">{log.targetRole || "—"}</td>
+                              <td className="px-4 py-3">
+                                {log.actor?.username || log.actor?.email || "Système"}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {auditLogs.meta.totalPages > 1 && (
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm text-muted-foreground">
+                          Page {auditLogs.meta.page} sur {auditLogs.meta.totalPages} ({auditLogs.meta.total} événements)
+                        </p>
+                        <div className="flex gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setAuditPage((page) => Math.max(1, page - 1))}
+                            disabled={auditPage === 1}
+                          >
+                            Précédent
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() =>
+                              setAuditPage((page) =>
+                                Math.min(auditLogs.meta.totalPages, page + 1)
+                              )
+                            }
+                            disabled={auditPage === auditLogs.meta.totalPages}
+                          >
+                            Suivant
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="text-center py-12 space-y-2">
+                    <ShieldCheck className="h-10 w-10 mx-auto text-muted-foreground" />
+                    <p className="text-muted-foreground">Aucune activité récente.</p>
+                  </div>
+                )}
+              </TabsContent>
+            )}
+
             {/* Configuration Tab */}
             <TabsContent value="config" className="space-y-6">
               <AdminConfigPanel />
@@ -1130,7 +1846,7 @@ export default function AdminPanel() {
                   <div className="text-center py-12 text-muted-foreground">Chargement...</div>
                 ) : publicResources && publicResources.length > 0 ? (
                   <div className="grid gap-4">
-                    {publicResources.map((resource: any) => (
+                    {publicResources.map((resource) => (
                       <Card key={resource.id} className="p-6">
                         <div className="flex items-start justify-between gap-4">
                           <div className="flex-1 space-y-2">

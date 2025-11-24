@@ -3,6 +3,7 @@
  */
 
 import express from 'express';
+import { Request, Response } from 'express';
 import { z } from 'zod';
 import { prisma } from '../config/database.js';
 import { authMiddleware } from '../middleware/auth.js';
@@ -33,7 +34,7 @@ router.get(
   '/',
   authMiddleware,
   generalRateLimit,
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: Request, res: Response) => {
     if (!req.user) {
       throw new AppError('Authentification requise', 401, 'AUTH_REQUIRED');
     }
@@ -101,7 +102,7 @@ router.get(
   '/:id',
   authMiddleware,
   generalRateLimit,
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: Request, res: Response) => {
     if (!req.user) {
       throw new AppError('Authentification requise', 401, 'AUTH_REQUIRED');
     }
@@ -168,7 +169,7 @@ router.post(
   '/',
   authMiddleware,
   generalRateLimit,
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: Request, res: Response) => {
     if (!req.user) {
       throw new AppError('Authentification requise', 401, 'AUTH_REQUIRED');
     }
@@ -214,7 +215,7 @@ router.put(
   '/:id',
   authMiddleware,
   generalRateLimit,
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: Request, res: Response) => {
     if (!req.user) {
       throw new AppError('Authentification requise', 401, 'AUTH_REQUIRED');
     }
@@ -276,7 +277,7 @@ router.delete(
   '/:id',
   authMiddleware,
   generalRateLimit,
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: Request, res: Response) => {
     if (!req.user) {
       throw new AppError('Authentification requise', 401, 'AUTH_REQUIRED');
     }
@@ -313,7 +314,7 @@ router.post(
   '/:id/members',
   authMiddleware,
   generalRateLimit,
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: Request, res: Response) => {
     if (!req.user) {
       throw new AppError('Authentification requise', 401, 'AUTH_REQUIRED');
     }
@@ -397,7 +398,7 @@ router.delete(
   '/:id/members/:userId',
   authMiddleware,
   generalRateLimit,
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: Request, res: Response) => {
     if (!req.user) {
       throw new AppError('Authentification requise', 401, 'AUTH_REQUIRED');
     }
@@ -453,7 +454,7 @@ router.get(
   '/:id/resources',
   authMiddleware,
   generalRateLimit,
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: Request, res: Response) => {
     if (!req.user) {
       throw new AppError('Authentification requise', 401, 'AUTH_REQUIRED');
     }
@@ -510,5 +511,6 @@ router.get(
 );
 
 export default router;
+
 
 

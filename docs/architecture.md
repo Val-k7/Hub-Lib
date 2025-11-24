@@ -302,3 +302,4 @@ Hub-Lib est une application web moderne pour la gestion de ressources, migrée d
 
 **Architecture finale validée et documentée ! 🎉**
 
+

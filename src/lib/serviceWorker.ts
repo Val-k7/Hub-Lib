@@ -2,6 +2,8 @@
  * Utilitaires pour gérer le Service Worker
  */
 
+import { logger } from './logger';
+
 /**
  * Enregistrer le Service Worker
  */
@@ -19,7 +21,7 @@ export async function registerServiceWorker() {
           newWorker.addEventListener('statechange', () => {
             if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
               // Nouvelle version disponible
-              console.log('Nouvelle version du Service Worker disponible');
+              logger.info('Nouvelle version du Service Worker disponible');
               // On pourrait afficher une notification à l'utilisateur
             }
           });
@@ -31,14 +33,14 @@ export async function registerServiceWorker() {
         registration.update();
       }, 60 * 60 * 1000); // Toutes les heures
 
-      console.log('Service Worker enregistré avec succès');
+      logger.info('Service Worker enregistré avec succès');
       return registration;
     } catch (error) {
-      console.error('Erreur lors de l\'enregistrement du Service Worker:', error);
+      logger.error('Erreur lors de l\'enregistrement du Service Worker', error instanceof Error ? error : new Error(String(error)));
       return null;
     }
   } else {
-    console.warn('Service Workers non supportés par ce navigateur');
+    logger.warn('Service Workers non supportés par ce navigateur');
     return null;
   }
 }
@@ -51,9 +53,9 @@ export async function unregisterServiceWorker() {
     try {
       const registration = await navigator.serviceWorker.ready;
       await registration.unregister();
-      console.log('Service Worker désenregistré');
+      logger.info('Service Worker désenregistré');
     } catch (error) {
-      console.error('Erreur lors du désenregistrement:', error);
+      logger.error('Erreur lors du désenregistrement', error instanceof Error ? error : new Error(String(error)));
     }
   }
 }

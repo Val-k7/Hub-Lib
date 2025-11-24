@@ -15,6 +15,8 @@ import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { PageLoader } from "@/components/LoadingStates";
 import { FileUpload, UploadedFile } from "@/components/FileUpload";
+import { OAuthAccountsManager } from "@/components/OAuthAccountsManager";
+import { Separator } from "@/components/ui/separator";
 
 const EditProfile = () => {
   const navigate = useNavigate();
@@ -288,6 +290,13 @@ const EditProfile = () => {
                       maxLength={39}
                     />
                   </div>
+                </div>
+
+                <Separator className="my-6" />
+
+                {/* Comptes OAuth */}
+                <div className="space-y-4">
+                  <OAuthAccountsManager />
                 </div>
 
                 {/* Actions */}
